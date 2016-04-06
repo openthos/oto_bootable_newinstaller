@@ -25,15 +25,13 @@ include $(BUILD_HOST_EXECUTABLE)
 
 VER ?= $(shell date +"%F")
 
-SED = $(shell which sed)
-
 $(shell cp $(LOCAL_PATH)/replace/libgralloc_drm.so $(PRODUCT_OUT)/system/lib/)
 $(shell cp $(LOCAL_PATH)/replace/libgralloc_drm.so.64 $(PRODUCT_OUT)/system/lib64/)
 $(shell cp $(LOCAL_PATH)/replace/houdini5_* $(PRODUCT_OUT)/system/)
 $(shell cp $(LOCAL_PATH)/replace/enable_nativebridge $(PRODUCT_OUT)/system/bin/)
-$(shell $(SED) -i '$d' $(PRODUCT_OUT)/system/etc/init.sh)
-$(shell echo enable_nativebridge >> $(PRODUCT_OUT)/system/etc/init.sh)
-$(shell echo return 0 >> $(PRODUCT_OUT)/system/etc/init.sh)
+#$(shell $(SED) -i '$d' $(PRODUCT_OUT)/system/etc/init.sh)
+#$(shell echo enable_nativebridge >> $(PRODUCT_OUT)/system/etc/init.sh)
+#$(shell echo return 0 >> $(PRODUCT_OUT)/system/etc/init.sh)
 
 
 # use squashfs for iso, unless explictly disabled
