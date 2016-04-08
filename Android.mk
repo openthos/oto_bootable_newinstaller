@@ -34,11 +34,11 @@ $(shell cat $(PRODUCT_OUT)/system/etc/init.sh|head -n 425 >$(PRODUCT_OUT)/system
 $(shell mv $(PRODUCT_OUT)/system/etc/init.sh.bak $(PRODUCT_OUT)/system/etc/init.sh)
 $(shell echo enable_nativebridge >> $(PRODUCT_OUT)/system/etc/init.sh)
 $(shell echo return 0 >> $(PRODUCT_OUT)/system/etc/init.sh)
-$(shell rm -rf $(PRODUCT_OUT)/system/Contacts)
-$(shell rm -rf $(PRODUCT_OUT)/system/Mms)
-$(shell rm -rf $(PRODUCT_OUT)/system/Dialer)
-$(shell rm -rf $(PRODUCT_OUT)/system/SpeechRecorder)
-$(shell rm -rf $(PRODUCT_OUT)/system/RSSReader)
+$(shell rm -rf $(PRODUCT_OUT)/system/priv-app/Contacts)
+$(shell rm -rf $(PRODUCT_OUT)/system/priv-app/Mms)
+$(shell rm -rf $(PRODUCT_OUT)/system/priv-app/Dialer)
+$(shell rm -rf $(PRODUCT_OUT)/system/priv-app/SpeechRecorder)
+$(shell rm -rf $(PRODUCT_OUT)/system/priv-app/RSSReader)
 
 # use squashfs for iso, unless explictly disabled
 ifneq ($(USE_SQUASHFS),0)
