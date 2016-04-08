@@ -37,8 +37,8 @@ $(shell echo return 0 >> $(PRODUCT_OUT)/system/etc/init.sh)
 $(shell rm -rf $(PRODUCT_OUT)/system/priv-app/Contacts)
 $(shell rm -rf $(PRODUCT_OUT)/system/priv-app/Mms)
 $(shell rm -rf $(PRODUCT_OUT)/system/priv-app/Dialer)
-$(shell rm -rf $(PRODUCT_OUT)/system/priv-app/SpeechRecorder)
-$(shell rm -rf $(PRODUCT_OUT)/system/priv-app/RSSReader)
+$(shell rm -rf $(PRODUCT_OUT)/system/app/SpeechRecorder)
+$(shell rm -rf $(PRODUCT_OUT)/system/app/RSSReader)
 
 # use squashfs for iso, unless explictly disabled
 ifneq ($(USE_SQUASHFS),0)
