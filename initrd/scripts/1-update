@@ -1,0 +1,212 @@
+#
+# By xly
+# Last updated 2016/06/28
+#
+# License: GNU Public License
+#
+
+# for update
+
+rebooting()
+{
+	dialog --title " Rebooting... " --nocancel --pause "" 8 41 1
+	sync
+	umount -a
+	reboot -f
+}
+
+progress_bar()
+{
+	which dialog > /dev/null 2>&1
+	if [ $? -ne 0 ]; then
+	echo "$1  $2"
+
+	else
+	dialog --clear --title " $1 " --gauge "\n $2" 8 70
+	fi
+}
+
+check_update_root()
+{
+#	echo "check_update_root() $PWD"
+
+	iso=$1
+
+	#try_mount ro $dev /mnt || return 1
+
+		mkdir /update/iso
+		mount -o loop $iso /update/iso
+		#SRC=/update/iso
+		SRC=iso
+
+	if [ ! -e /update/$SRC/ramdisk.img ]; then
+		return 1
+	fi
+	zcat /update/$SRC/ramdisk.img | cpio -id > /dev/null
+	if [ -e /update/$SRC/system.sfs ]; then
+		[[ -d sfs ]] || mkdir -p sfs
+		mount -o loop /update/$SRC/system.sfs sfs
+		mount -o loop sfs/system.img system
+	elif [ -e /update/$SRC/system.img ]; then
+		mount -o remount,rw foo /update
+		mount -o loop /update/$SRC/system.img system
+	elif [ -d /update/$SRC/system ]; then
+		mount -o remount,rw foo /update
+		mount --bind /update/$SRC/system system
+	else
+		rm -rf *
+		return 1
+	fi
+	mkdir mnt
+	echo " found at $1"
+	#rm /sbin/mke2fs
+	#hash -r
+}
+
+update_to()
+{
+	echo "update_to() $PWD"
+
+	cd /
+
+	if [ !\( mountpoint -q /mnt -a -a /mnt/android*/kernel \) ];then
+		dialog --clear --title " Error " --defaultno --yesno \
+			"\n Cannot find Android-x86 partition \n" 8 37
+
+		return 255
+	fi
+
+	#adir=`dirname /mnt/android*/kernel`
+
+	fs=`cat /proc/mounts | grep '/android/system' | awk '{ print $3 }'`
+
+###
+	cmdline=`sed "s|\(initrd.*img\s*\)||; s|quiet\s*||; s|\(vga=\w\+\?\s*\)||; s|\(DPI=\w\+\?\s*\)||; s|\(INSTALL=\w\+\?\s*\)||; s|\(SRC=\S\+\?\s*\)||; s|\(DEBUG=\w\+\?\s*\)||; s|\(BOOT_IMAGE=\S\+\?\s*\)||" /proc/cmdline`
+	asrc=android-$VER
+	#asrc=$(echo $SRC | cut -b 2- )
+#add GRUB
+	if [ -d /mnt/grub ]; then
+		cp -af /mnt/grub/menu.lst /mnt/grub/menu.lst.old
+		menulst=/mnt/grub/menu.lst
+		#echo -e "title new $asrc\n\tkernel /$asrc/kernel.new quiet $cmdline SRC=/$asrc\n\tinitrd /$asrc/initrd.img.new\n" >> $menulst
+		echo -e "title new Android-x86\n\tkernel /$asrc/upgrade/kernel quiet $cmdline SRC=/$asrc/upgrade\n\tinitrd /$asrc/upgrade/initrd.img\n" >> $menulst
+
+	fi
+
+#add EFI GRUB2
+	#adev=$( awk '/android\/system/{print $1}' /proc/mounts )
+	#for efi_dev in $( blkid | awk '/EFI/{print $1}') ; do
+
+	if [ -d /mnt/efi ]; then
+		cp -af /mnt/efi/boot/grub.cfg /mnt/efi/boot/grub.cfg.old
+		grubcfg=/mnt/efi/boot/grub.cfg
+		#echo -e "menuentry \"new $asrc \" {\n\tsearch --set=root --file /$asrc/kernel.new\n\tlinuxefi /$asrc/kernel.new quiet $cmdline \n\tinitrdefi /$asrc/initrd.img.new\n}" >> $grubcfg
+		echo -e "menuentry \"new Android-x86 \" {\n\tsearch --set=root --file /$asrc/upgrade/kernel\n\tlinuxefi /$asrc/upgrade/kernel quiet $cmdline \n\tinitrdefi /$asrc/upgrade/initrd.img\n}" >> $grubcfg
+
+	fi
+
+#system ...
+
+	files="update/$SRC/kernel update/$SRC/initrd.img update/$SRC/ramdisk.img"
+	sysimg="update/system"
+	files="$files $sysimg"
+
+	size=0
+	for s in `du -sk $files | awk '{print $1}'`; do
+		size=$(($size+$s))
+	done
+
+	rm -rf $adir/upgrade
+	mkdir -p $adir/upgrade
+	cd $adir/upgrade
+
+	( ( cd /; find $files | cpio -H newc -o ) | pv -ns ${size}k | ( cpio -iud > /dev/null; echo $? > /tmp/result )) 2>&1 \
+		| progress_bar "Upgrade Android-x86" "Expect to write $size KB..."
+	result=$((`cat /tmp/result`*255))
+
+	if [ $result -eq 0 ]; then
+		for d in update sfs ./$SRC; do
+			[ -d $d ] && mv $d/* . && rmdir $d
+		done
+		chown 0.0 *
+		for f in *; do
+			[ -d $f ] || chmod 644 $f
+		done
+
+	fi
+
+	ln -s ../data ./data
+
+	dialog --infobox "\n Syncing to disk..." 5 27
+	sync
+
+	return $result
+}
+
+do_update()
+{
+#adir=`dirname /mnt/android*/kernel`
+
+mkdir /update
+mount -t tmpfs tmpfs /update
+cd /update
+
+check_update_root $iso_file
+
+if [ -e /update/iso/install.img ];then
+
+zcat /update/iso/install.img | ( cd /; cpio -iud > /dev/null )
+busybox modprobe atkbd
+
+else
+	echo "Cannot find install.img "
+	return 1
+fi
+
+#update_hd
+
+retval=1
+
+choice=""
+update_to $choice
+retval=$?
+
+if [ $retval -eq 255 ]; then
+dialog --title ' Error! ' --yes-label Retry --no-label Reboot \
+--yesno '\n Upgrade failed! Please check if you have enough free disk space to upgrade Android-x86.' 8 51
+[ $? -eq 1 ] && rebooting
+fi
+
+if [ -e /mnt/android*/upgrade/kernel ];then
+
+#	case "`cat $tempfile`" in
+rebooting
+fi
+
+return 1;
+
+}
+
+update_detect()
+{
+
+	if [ !\( mountpoint -q /mnt -a -e /mnt/android*/kernel \) ];then
+		echo "Cannot find Android-x86 partition "
+
+		return 255
+	fi
+	adir=`dirname /mnt/android*/kernel`
+
+	detect_file="$adir/data/local/update"
+	iso_file="$adir/data/local/android_x86_64_4.4.iso"
+
+	value=`tail -n 1 $detect_file`
+	if [ "$value"x = "1"x -a -e $iso_file ]; then
+	echo "Update Android-x86 "
+	do_update
+	fi
+
+	echo "No Update "
+
+}
+

@@ -188,6 +188,9 @@ done
 
 [ -n "$INSTALL" ] && do_install
 
+# Android-x86 upgrade
+update_detect
+
 load_modules
 mount_data
 mount_sdcard
