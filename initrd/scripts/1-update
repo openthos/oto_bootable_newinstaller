@@ -163,6 +163,12 @@ else
 	return 1
 fi
 
+	dialog --title " Confirm " --no-label Skip --defaultno --yesno \
+		"\n Do you want to upgrade Android-x86 ?" 7 47
+	if [ $? -ne 0 ]; then
+		return 1
+	fi
+
 #update_hd
 
 retval=1
@@ -179,7 +185,8 @@ fi
 
 if [ -e /mnt/android*/upgrade/kernel ];then
 
-#	case "`cat $tempfile`" in
+mv $detect_file ${detect_file}.old
+
 rebooting
 fi
 
@@ -198,7 +205,10 @@ update_detect()
 	adir=`dirname /mnt/android*/kernel`
 
 	detect_file="$adir/data/local/update"
-	iso_file="$adir/data/local/android_x86_64_4.4.iso"
+
+	iso_name=$(tac $detect_file | sed -n 2p )
+	iso_file=$(dirname $detect_file)/$iso_name
+	#iso_file="$adir/data/local/android_x86_64_4.4.iso"
 
 	value=`tail -n 1 $detect_file`
 	if [ "$value"x = "1"x -a -e $iso_file ]; then
