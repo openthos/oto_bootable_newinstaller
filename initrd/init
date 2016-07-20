@@ -198,6 +198,13 @@ setup_tslib
 setup_dpi
 post_detect
 
+
+if [ -e /android/data/rec_reset ]; then
+   rm -rf /android/data/*
+   rm -rf /cache/*
+fi
+
+
 if [ 0$DEBUG -gt 1 ]; then
 	echo -e "\nUse Alt-F1/F2/F3 to switch between virtual consoles"
 	echo -e "Type 'exit' to enter Android...\n"
