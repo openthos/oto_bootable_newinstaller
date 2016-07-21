@@ -135,7 +135,8 @@ update_to()
 
 	fi
 
-	ln -s ../data ./data
+	#ln -s ../data ./data
+	cp -af ../data ./
 
 	dialog --infobox "\n Syncing to disk..." 5 27
 	sync
