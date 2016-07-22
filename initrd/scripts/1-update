@@ -97,8 +97,6 @@ update_to()
 	#adev=$( awk '/android\/system/{print $1}' /proc/mounts )
 	#for efi_dev in $( blkid | awk '/EFI/{print $1}') ; do
 
-
-
 	if [ -d /mnt/efi ]; then
 		cp -af /mnt/efi/boot/grub.cfg /mnt/efi/boot/grub.cfg.old
 		grubcfg=/mnt/efi/boot/grub.cfg
@@ -125,6 +123,7 @@ update_to()
 		break
 	fi
 
+	fi
 	done #for
 
 	fi
