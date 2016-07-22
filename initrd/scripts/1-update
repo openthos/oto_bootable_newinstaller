@@ -104,28 +104,26 @@ update_to()
 		echo -e "menuentry \"new Android-x86 \" {\n\tsearch --set=root --file /$asrc/upgrade/kernel\n\tlinuxefi /$asrc/upgrade/kernel quiet $cmdline \n\tinitrdefi /$asrc/upgrade/initrd.img\n}" >> $grubcfg
 
 	elif [ ! -d /mnt/grub ]; then
+
 	adev=$( awk '/android\/system/{print $1}' /proc/mounts )
+	for fat_dev in $( blkid | awk '/fat/{print $1}') ;do
 
-	for fat_dev in $( blkid | awk '/fat/{print $1}') ; do
+		if [ "${fat_dev%%[0-9]*}"x = "${adev%%[0-9]*}"x ];then
+		efi_dir="/update/efi"
+		[ -d $efi_dir ] || mkdir $efi_dir
+		mountpoint -q $efi_dir && umount $efi_dir
+		mount -o rw ${fat_dev%:*} $efi_dir
 
-	if [ "${fat_dev%%[0-9]*}"x = "${adev%%[0-9]*}"x ];then
-	efi_dir="/update/efi"
-	[ -d $efi_dir ] || mkdir $efi_dir
-	mountpoint -q $efi_dir && umount $efi_dir
+			if [ -e $efi_dir/efi/boot/grub.cfg ]; then
+				grubcfg=$efi_dir/efi/boot/grub.cfg
+				cp -af $grubcfg ${grubcfg}.old
+				echo -e "menuentry \"new Android-x86 \" {\n\tsearch --set=root --file /$asrc/upgrade/kernel\n\tlinuxefi /$asrc/upgrade/kernel quiet $cmdline \n\tinitrdefi /$asrc/upgrade/initrd.img\n}" >> $grubcfg
 
-	mount -o rw ${fat_dev%:*} $efi_dir
-	if [ -e $efi_dir/efi/boot/grub.cfg ]; then
-		grubcfg=$efi_dir/efi/boot/grub.cfg
-		cp -af $grubcfg ${grubcfg}.old
-		echo -e "menuentry \"new Android-x86 \" {\n\tsearch --set=root --file /$asrc/upgrade/kernel\n\tlinuxefi /$asrc/upgrade/kernel quiet $cmdline \n\tinitrdefi /$asrc/upgrade/initrd.img\n}" >> $grubcfg
-
-		efi_dev=${fat_dev%:*}
-		break
-	fi
-
-	fi
-	done #for
-
+				efi_dev=${fat_dev%:*}
+				break
+			fi
+		fi
+	done
 	fi
 
 #system ...
