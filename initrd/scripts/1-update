@@ -1,4 +1,5 @@
-#
+# By Chen Yu
+# Last updated 2016/08/03
 # By xly
 # Last updated 2016/06/28
 #
@@ -158,6 +159,9 @@ update_to()
 
 	#ln -s ../data ./data
 	cp -af ../data ./
+    # clean some old cache
+	dialog --infobox "\n Clean Old Cache..." 5 27
+    rm -rf ./data/dalvik-cache/* ./data/system/wpa_supplicant
 
 	dialog --infobox "\n Syncing to disk..." 5 27
 	sync
