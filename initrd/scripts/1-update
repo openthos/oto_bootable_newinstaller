@@ -37,12 +37,25 @@ check_update_root()
 	#SRC=iso
 
 	if [ ! -e /update/iso/ramdisk.img ]; then
+	    echo "Missing ramdisk.img"
 		return 1
 	fi
-	zcat /update/iso/ramdisk.img | cpio -id > /dev/null
+
+	if [ ! -e /update/iso/kernel ]; then
+	    echo "Missing kernel"
+		return 1
+	fi
+	
+	if [ ! -e /update/iso/initrd.img  ]; then
+	    echo "Missing initrd.img"
+		return 1
+	fi	
+
+
 	if [ -e /update/iso/system.sfs ]; then
 	    mountpoint -q /update/sfs && umount /udpate/sfs
 		[[ -d /update/sfs ]] || mkdir -p /update/sfs
+		[[ -d /update/system ]] || mkdir -p /update/system
 		mount -o loop /update/iso/system.sfs /update/sfs
 		mount -o loop /update/sfs/system.img /update/system
 	elif [ -e /update/iso/system.img ]; then
@@ -55,7 +68,7 @@ check_update_root()
 		rm -rf *
 		return 1
 	fi
-	mkdir /update/mnt
+	mkdir -p /update/mnt
 	echo " found at $1"
 }
 
@@ -76,38 +89,20 @@ update_to()
 	files="/udpate/iso/kernel /update/iso/initrd.img update/iso/ramdisk.img"
 	sysimg="/update/system"
 	files="$files $sysimg"
-
-	size=0
-	for s in `du -sk $files | awk '{print $1}'`; do
-		size=$(($size+$s))
-	done
-
-   
+    
     if [ $1 == $newadir ]; then
         dialog --infobox "\n update $newadir itself..." 5 27
         mv $newadir/data $newadir-data
     fi
-    
-	rm -rf $newadir/*
-	
+        
+    rm -rf $newadir/*
 	mkdir -p $newadir
-	
-	cd $newadir
+    cp f /update/iso/kernel       $newadir/
+    cp f /update/iso/initrd.img   $newadir/
+    cp f /update/iso/ramdisk.img  $newadir/   
+    cp -af /update/system         $newadir/    
+   
 
-	(( cd /update/iso; find $files | cpio -H newc -o ) | pv -ns ${size}k | ( cpio -iud > /dev/null; echo $? > /tmp/result )) 2>&1 \
-		| progress_bar "Update Newest OPENTHOS" "Expect to write $size KB..."
-	result=$((`cat /tmp/result`*255))
-
-	#chyyuu: What's the meaning of below codes of 9 lines???
-#	if [ $result -eq 0 ]; then
-#		for d in /update /update/sfs /udate/iso; do
-#			[ -d $d ] && mv $d/* . && rmdir $d
-#		done
-#		chown 0.0 *
-#		for f in *; do
-#			[ -d $f ] || chmod 644 $f
-#		done
-#	fi
 
     mkdir -p $newadir/data
     if [ $1 != $newadir ]; then
