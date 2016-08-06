@@ -1,13 +1,15 @@
 #!/bin/busybox sh
 #
-# By Chih-Wei Huang <cwhuang@linux.org.tw>
-# and Thorsten Glaser <tg@mirbsd.org>
-#
-# Last updated 2015/10/23
+# By 
+# Chih-Wei Huang   <cwhuang@linux.org.tw>
+# Thorsten Glaser  <tg@mirbsd.org>
+# Luoyuan Xiao     <xiaoluoyuan@163.com>
+# Yu Chen          <yuchen@tsinghua.edu.cn>
+# Last updated 2016/08/07
 #
 # License: GNU Public License
 # We explicitely grant the right to use the scripts
-# with Android-x86 project.
+# with Android-x86 project and OTO project.
 #
 
 PATH=/sbin:/bin:/system/bin:/system/xbin; export PATH
@@ -125,7 +127,7 @@ debug_shell()
 	fi
 }
 
-echo -n Detecting Android-x86...
+echo -n Detecting OTO-Android-x86...
 
 [ -z "$SRC" -a -n "$BOOT_IMAGE" ] && SRC=`dirname $BOOT_IMAGE`
 
@@ -188,9 +190,9 @@ done
 
 [ -n "$INSTALL" ] && do_install
 
-# Android-x86 upgrade
+# OTO-Android-x86 upgrade
 update_detect
-
+# Other normal steps
 load_modules
 mount_data
 mount_sdcard
@@ -223,7 +225,7 @@ exec ${SWITCH:-switch_root} /android /init
 # avoid kernel panic
 while :; do
 	echo
-	echo '	Android-x86 console shell. Use only in emergencies.'
+	echo '	OTO-Android-x86 console shell. Use only in emergencies.'
 	echo
 	debug_shell fatal-err
 done

@@ -1,7 +1,7 @@
-# By Chen Yu
+# By 
+# Luoyuan Xiao     <xiaoluoyuan@163.com>
+# Yu Chen          <yuchen@tsinghua.edu.cn>
 # Last updated 2016/08/03
-# By xly
-# Last updated 2016/06/28
 #
 # License: GNU Public License
 #
@@ -10,7 +10,7 @@
 
 rebooting()
 {
-	dialog --title " Rebooting... " --nocancel --pause "" 8 41 1
+	dialog --title " OTO-Android-x86 Rebooting... " --nocancel --pause "" 8 41 1
 	sync
 	umount -a
 	reboot -f
@@ -72,7 +72,7 @@ update_to()
 
 	if [ !\( mountpoint -q /mnt -a -a /mnt/android*/kernel \) ];then
 		dialog --clear --title " Error " --defaultno --yesno \
-			"\n Cannot find Android-x86 partition \n" 8 37
+			"\n Cannot find OTO-Android-x86 partition \n" 8 37
 
 		return 255
 	fi
@@ -82,50 +82,10 @@ update_to()
 	fs=`cat /proc/mounts | grep '/android/system' | awk '{ print $3 }'`
 
 ###
-	cmdline=`sed "s|\(initrd.*img\s*\)||; s|quiet\s*||; s|\(vga=\w\+\?\s*\)||; s|\(DPI=\w\+\?\s*\)||; s|\(INSTALL=\w\+\?\s*\)||; s|\(SRC=\S\+\?\s*\)||; s|\(DEBUG=\w\+\?\s*\)||; s|\(BOOT_IMAGE=\S\+\?\s*\)||" /proc/cmdline`
-	asrc=android-$VER
-	#asrc=$(echo $SRC | cut -b 2- )
-#add GRUB
-	if [ -d /mnt/grub ]; then
-		cp -af /mnt/grub/menu.lst /mnt/grub/menu.lst.old
-		menulst=/mnt/grub/menu.lst
-		#echo -e "title new $asrc\n\tkernel /$asrc/kernel.new quiet $cmdline SRC=/$asrc\n\tinitrd /$asrc/initrd.img.new\n" >> $menulst
-		echo -e "title new Android-x86\n\tkernel /$asrc/upgrade/kernel quiet $cmdline SRC=/$asrc/upgrade\n\tinitrd /$asrc/upgrade/initrd.img\n" >> $menulst
-
-	fi
-
-#add EFI GRUB2
-	#adev=$( awk '/android\/system/{print $1}' /proc/mounts )
-	#for efi_dev in $( blkid | awk '/EFI/{print $1}') ; do
-
-	if [ -d /mnt/efi ]; then
-		cp -af /mnt/efi/boot/grub.cfg /mnt/efi/boot/grub.cfg.old
-		grubcfg=/mnt/efi/boot/grub.cfg
-		#echo -e "menuentry \"new $asrc \" {\n\tsearch --set=root --file /$asrc/kernel.new\n\tlinuxefi /$asrc/kernel.new quiet $cmdline \n\tinitrdefi /$asrc/initrd.img.new\n}" >> $grubcfg
-		echo -e "menuentry \"new Android-x86 \" {\n\tsearch --set=root --file /$asrc/upgrade/kernel\n\tlinuxefi /$asrc/upgrade/kernel quiet $cmdline \n\tinitrdefi /$asrc/upgrade/initrd.img\n}" >> $grubcfg
-
-	elif [ ! -d /mnt/grub ]; then
-
-	adev=$( awk '/android\/system/{print $1}' /proc/mounts )
-	for fat_dev in $( blkid | awk '/fat/{print $1}') ;do
-
-		if [ "${fat_dev%%[0-9]*}"x = "${adev%%[0-9]*}"x ];then
-		efi_dir="/update/efi"
-		[ -d $efi_dir ] || mkdir $efi_dir
-		mountpoint -q $efi_dir && umount $efi_dir
-		mount -o rw ${fat_dev%:*} $efi_dir
-
-			if [ -e $efi_dir/efi/boot/grub.cfg ]; then
-				grubcfg=$efi_dir/efi/boot/grub.cfg
-				cp -af $grubcfg ${grubcfg}.old
-				echo -e "menuentry \"new Android-x86 \" {\n\tsearch --set=root --file /$asrc/upgrade/kernel\n\tlinuxefi /$asrc/upgrade/kernel quiet $cmdline \n\tinitrdefi /$asrc/upgrade/initrd.img\n}" >> $grubcfg
-
-				efi_dev=${fat_dev%:*}
-				break
-			fi
-		fi
-	done
-	fi
+#add GRUB entry
+# Done in install/1-install
+#add EFI GRUB2 entry
+# Done in install/1-install
 
 #system ...
 
@@ -143,7 +103,7 @@ update_to()
 	cd $adir/upgrade
 
 	( ( cd /; find $files | cpio -H newc -o ) | pv -ns ${size}k | ( cpio -iud > /dev/null; echo $? > /tmp/result )) 2>&1 \
-		| progress_bar "Upgrade Android-x86" "Expect to write $size KB..."
+		| progress_bar "Upgrade OTO-Android-x86" "Expect to write $size KB..."
 	result=$((`cat /tmp/result`*255))
 
 	if [ $result -eq 0 ]; then
@@ -190,7 +150,7 @@ else
 fi
 
 	dialog --title " Confirm " --no-label Skip --defaultno --yesno \
-		"\n Do you want to upgrade Android-x86 ?" 7 47
+		"\n Do you want to upgrade OTO-Android-x86 ?" 7 47
 	if [ $? -ne 0 ]; then
 		return 1
 	fi
@@ -205,7 +165,7 @@ retval=$?
 
 if [ $retval -eq 255 ]; then
 dialog --title ' Error! ' --yes-label Retry --no-label Reboot \
---yesno '\n Upgrade failed! Please check if you have enough free disk space to upgrade Android-x86.' 8 51
+--yesno '\n Upgrade failed! Please check if you have enough free disk space to upgrade OTO-Android-x86.' 8 51
 [ $? -eq 1 ] && rebooting
 fi
 
@@ -224,7 +184,7 @@ update_detect()
 {
 
 	if [ !\( mountpoint -q /mnt -a -e /mnt/android*/kernel \) ];then
-		echo "Cannot find Android-x86 partition "
+		echo "Cannot find OTO-Android-x86 partition "
 
 		return 255
 	fi
@@ -239,7 +199,7 @@ update_detect()
 
 	value=`tail -n 1 $detect_file`
 	if [ "$value"x = "1"x -a -e $iso_file ]; then
-	echo "Update Android-x86 "
+	echo "Update OTO-Android-x86 "
 	do_update
 	fi
 
