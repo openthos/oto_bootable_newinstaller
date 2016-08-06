@@ -77,7 +77,6 @@ update_to()
 		return 255
 	fi
 
-	#adir=`dirname /mnt/android*/kernel`
 
 	fs=`cat /proc/mounts | grep '/android/system' | awk '{ print $3 }'`
 
@@ -98,12 +97,12 @@ update_to()
 		size=$(($size+$s))
 	done
 
-	rm -rf $adir/upgrade
-	mkdir -p $adir/upgrade
-	cd $adir/upgrade
+	rm -rf $newadir/*
+	mkdir -p $newadir
+	cd $newadir
 
 	( ( cd /; find $files | cpio -H newc -o ) | pv -ns ${size}k | ( cpio -iud > /dev/null; echo $? > /tmp/result )) 2>&1 \
-		| progress_bar "Upgrade OPENTHOS" "Expect to write $size KB..."
+		| progress_bar "Update Newest OPENTHOS" "Expect to write $size KB..."
 	result=$((`cat /tmp/result`*255))
 
 	if [ $result -eq 0 ]; then
@@ -131,7 +130,7 @@ update_to()
 
 do_update()
 {
-#adir=`dirname /mnt/android*/kernel`
+newadir="/mnt/androidnewest"
 
 mkdir /update
 mount -t tmpfs tmpfs /update
@@ -150,12 +149,10 @@ else
 fi
 
 	dialog --title " Confirm " --no-label Skip --defaultno --yesno \
-		"\n Do you want to upgrade OPENTHOS ?" 7 47
+		"\n Do you want to using newest OPENTHOS ?" 7 47
 	if [ $? -ne 0 ]; then
 		return 1
 	fi
-
-#update_hd
 
 retval=1
 
@@ -164,16 +161,14 @@ update_to $choice
 retval=$?
 
 if [ $retval -eq 255 ]; then
-dialog --title ' Error! ' --yes-label Retry --no-label Reboot \
---yesno '\n Upgrade failed! Please check if you have enough free disk space to upgrade OPENTHOS.' 8 51
+	dialog --title ' Error! ' --yes-label Retry --no-label Reboot \
+		--yesno '\n Upgrade failed! Please check enough free disk space to update newest OPENTHOS.' 8 51
 [ $? -eq 1 ] && rebooting
 fi
 
-if [ -e /mnt/android*/upgrade/kernel ];then
-
-mv $detect_file ${detect_file}.old
-
-rebooting
+if [ -e $newadir/kernel ];then
+	mv $detect_file ${detect_file}.old
+	rebooting
 fi
 
 return 1;
@@ -188,14 +183,13 @@ update_detect()
 
 		return 255
 	fi
-	adir=`dirname /mnt/android*/kernel`
+	adir=`dirname /mnt/android-*/kernel`
 
-	#detect_file="$adir/data/local/update"
 	detect_file="$adir/data/media/0/System_OS/update"
 
 	iso_name=$(tac $detect_file | sed -n 2p )
 	iso_file=$(dirname $detect_file)/$iso_name
-	#iso_file="$adir/data/local/android_x86_64_4.4.iso"
+	#iso_file="system.iso"
 
 	value=`tail -n 1 $detect_file`
 	if [ "$value"x = "1"x -a -e $iso_file ]; then

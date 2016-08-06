@@ -11,7 +11,7 @@
 # We explicitely grant the right to use the scripts
 # with Android-x86 project and OTO project.
 #
-
+set -x
 PATH=/sbin:/bin:/system/bin:/system/xbin; export PATH
 
 # configure debugging output
