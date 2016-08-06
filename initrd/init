@@ -127,7 +127,7 @@ debug_shell()
 	fi
 }
 
-echo -n Detecting OTO-Android-x86...
+echo -n Detecting OPENTHOS...
 
 [ -z "$SRC" -a -n "$BOOT_IMAGE" ] && SRC=`dirname $BOOT_IMAGE`
 
@@ -190,7 +190,7 @@ done
 
 [ -n "$INSTALL" ] && do_install
 
-# OTO-Android-x86 upgrade
+# OPENTHOS upgrade
 update_detect
 # Other normal steps
 load_modules
@@ -225,7 +225,7 @@ exec ${SWITCH:-switch_root} /android /init
 # avoid kernel panic
 while :; do
 	echo
-	echo '	OTO-Android-x86 console shell. Use only in emergencies.'
+	echo '	OPENTHOS console shell. Use only in emergencies.'
 	echo
 	debug_shell fatal-err
 done

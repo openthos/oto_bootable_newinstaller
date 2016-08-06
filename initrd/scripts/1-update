@@ -10,7 +10,7 @@
 
 rebooting()
 {
-	dialog --title " OTO-Android-x86 Rebooting... " --nocancel --pause "" 8 41 1
+	dialog --title " OPENTHOS Rebooting... " --nocancel --pause "" 8 41 1
 	sync
 	umount -a
 	reboot -f
@@ -72,7 +72,7 @@ update_to()
 
 	if [ !\( mountpoint -q /mnt -a -a /mnt/android*/kernel \) ];then
 		dialog --clear --title " Error " --defaultno --yesno \
-			"\n Cannot find OTO-Android-x86 partition \n" 8 37
+			"\n Cannot find OPENTHOS partition \n" 8 37
 
 		return 255
 	fi
@@ -103,7 +103,7 @@ update_to()
 	cd $adir/upgrade
 
 	( ( cd /; find $files | cpio -H newc -o ) | pv -ns ${size}k | ( cpio -iud > /dev/null; echo $? > /tmp/result )) 2>&1 \
-		| progress_bar "Upgrade OTO-Android-x86" "Expect to write $size KB..."
+		| progress_bar "Upgrade OPENTHOS" "Expect to write $size KB..."
 	result=$((`cat /tmp/result`*255))
 
 	if [ $result -eq 0 ]; then
@@ -150,7 +150,7 @@ else
 fi
 
 	dialog --title " Confirm " --no-label Skip --defaultno --yesno \
-		"\n Do you want to upgrade OTO-Android-x86 ?" 7 47
+		"\n Do you want to upgrade OPENTHOS ?" 7 47
 	if [ $? -ne 0 ]; then
 		return 1
 	fi
@@ -165,7 +165,7 @@ retval=$?
 
 if [ $retval -eq 255 ]; then
 dialog --title ' Error! ' --yes-label Retry --no-label Reboot \
---yesno '\n Upgrade failed! Please check if you have enough free disk space to upgrade OTO-Android-x86.' 8 51
+--yesno '\n Upgrade failed! Please check if you have enough free disk space to upgrade OPENTHOS.' 8 51
 [ $? -eq 1 ] && rebooting
 fi
 
@@ -184,7 +184,7 @@ update_detect()
 {
 
 	if [ !\( mountpoint -q /mnt -a -e /mnt/android*/kernel \) ];then
-		echo "Cannot find OTO-Android-x86 partition "
+		echo "Cannot find OPENTHOS partition "
 
 		return 255
 	fi
@@ -199,7 +199,7 @@ update_detect()
 
 	value=`tail -n 1 $detect_file`
 	if [ "$value"x = "1"x -a -e $iso_file ]; then
-	echo "Update OTO-Android-x86 "
+	echo "Update OPENTHOS "
 	do_update
 	fi
 
