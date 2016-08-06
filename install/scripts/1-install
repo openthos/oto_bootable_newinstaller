@@ -232,9 +232,6 @@ create_data_img()
 
 try_upgrade()
 {
-#	[ -d $1 ] && return
-    dialog --title " Try Upgrade " --yesno \
-		"\nDo you want to upgrade oepnthos?." 10 61
 	PREV_VERS="2016-* 2017-* 2018-*"
 	for v in $PREV_VERS; do
 		PREV_OSES=hd/android-$v
@@ -243,14 +240,26 @@ try_upgrade()
 		    if [ -d $prev_os ]; then
 		        echo "Find os" $prev_os
 			    dialog --title " Question " --yesno \
-				    "\nAn older OPENTHOS version $prev_os is detected.\nWould you like to upgrade it?" 8 55
+				    "\nAn older OPENTHOS version $prev_os is detected. Would you like to upgrade it?" 8 55
 			    if [ $? -eq 0 ]; then
 			        if [ $prev_os != $1 ]; then
 			            if [ -d $1 ]; then
 			                echo $prev_os "!=" $1 ", and" $1 "DIR existed"
 				            dialog --title "NOTICE" --yesno \
-							    	"\n $1 existed. Do you want to contine ?." 10 61
-					        continue
+							    	"\n $1 existed. Do you want to break upgrade?." 10 61
+					        if [ $? -eq 0 ]; then
+					            continue
+					        else
+					             dialog --title "NOTICE" --yesno \
+							    	  "\n Do you want to remove $1 and upgrade $prev_os?." 10 61
+							     if [ $? -eq 0 ]; then
+					                  rm -rf $1
+				    	              mv $prev_os $1
+				    	              rm -rf $1/data/dalvik-cache/* $1/data/system/wpa_supplicant
+				    	              sed -i 's/\(ctrl_interface=\)\(.*\)/\1wlan0/' $1/data/misc/wifi/wpa_supplicant.conf
+				    	              break 2		    					                  
+					             else
+					                  continue					                  
 					    else
 					        echo $prev_os "!=" $1 "and no" $1 "DIR"
 				    	    mv $prev_os $1
@@ -337,8 +346,8 @@ install_to()
 		echo -e "menuentry \"OPENTHOS $VER (DEBUG mode)\" {\n\tsearch --set=root --file /$asrc/kernel\n\tlinuxefi /$asrc/kernel $cmdline DEBUG=2\n\tinitrdefi /$asrc/initrd.img\n}" >> $grubcfg
 #add newest updated OPENTHOS entry
 		newasrc=androidnewest
-		echo -e "menuentry \"OPENTHOS Newest\" {\n\tsearch --set=root --file /$newasrc/kernel\n\tlinuxefi /$asrc/upgrade/kernel quiet $cmdline \n\tinitrdefi /$newasrc/initrd.img\n}" >> $grubcfg
-		echo -e "menuentry \"OPENTHOS Newest (DEBUG mode)\" {\n\tsearch --set=root --file /$newasrc/kernel\n\tlinuxefi /$asrc/upgrade/kernel quiet $cmdline DEBUG=2\n\tinitrdefi /$newasrc/initrd.img\n}" >> $grubcfg		
+		echo -e "menuentry \"OPENTHOS Newest\" {\n\tsearch --set=root --file /$newasrc/kernel\n\tlinuxefi /$asrc/kernel quiet $cmdline \n\tinitrdefi /$newasrc/initrd.img\n}" >> $grubcfg
+		echo -e "menuentry \"OPENTHOS Newest (DEBUG mode)\" {\n\tsearch --set=root --file /$newasrc/kernel\n\tlinuxefi /$asrc/kernel quiet $cmdline DEBUG=2\n\tinitrdefi /$newasrc/initrd.img\n}" >> $grubcfg		
 
 		if [ -e /hd/EFI/Microsoft/Boot/bootmgfw.efi ]; then
 			echo -e "menuentry \"Windows (UEFI)\" {\n\tsearch --set=root --file /EFI/Microsoft/Boot/bootmgfw.efi\n\tchainloader /EFI/Microsoft/Boot/bootmgfw.efi\n}" >> $grubcfg

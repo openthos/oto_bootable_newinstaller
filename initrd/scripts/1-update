@@ -162,11 +162,11 @@ retval=$?
 
 if [ $retval -eq 255 ]; then
 	dialog --title ' Error! ' --yes-label Retry --no-label Reboot \
-		--yesno '\n Upgrade failed! Please check enough free disk space to update newest OPENTHOS.' 8 51
+		--yesno '\n Update failed! Please check enough free disk space to update newest OPENTHOS.' 8 51
 [ $? -eq 1 ] && rebooting
 fi
 
-if [ -e $newadir/kernel ];then
+if [ -e $adir/kernel ];then
 	mv $detect_file ${detect_file}.old
 	rebooting
 fi
