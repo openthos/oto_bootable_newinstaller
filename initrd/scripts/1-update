@@ -20,48 +20,43 @@ progress_bar()
 {
 	which dialog > /dev/null 2>&1
 	if [ $? -ne 0 ]; then
-	echo "$1  $2"
-
+	     echo "$1  $2"
 	else
-	dialog --clear --title " $1 " --gauge "\n $2" 8 70
+	     dialog --clear --title " $1 " --gauge "\n $2" 8 70
 	fi
 }
 
 check_update_root()
 {
-#	echo "check_update_root() $PWD"
+	echo "check_update_root() $PWD"
 
 	iso=$1
 
-	#try_mount ro $dev /mnt || return 1
+	mkdir -p /update/iso
+	mount -o loop $iso /update/iso
+	#SRC=iso
 
-		mkdir /update/iso
-		mount -o loop $iso /update/iso
-		#SRC=/update/iso
-		SRC=iso
-
-	if [ ! -e /update/$SRC/ramdisk.img ]; then
+	if [ ! -e /update/iso/ramdisk.img ]; then
 		return 1
 	fi
-	zcat /update/$SRC/ramdisk.img | cpio -id > /dev/null
-	if [ -e /update/$SRC/system.sfs ]; then
-		[[ -d sfs ]] || mkdir -p sfs
-		mount -o loop /update/$SRC/system.sfs sfs
-		mount -o loop sfs/system.img system
-	elif [ -e /update/$SRC/system.img ]; then
+	zcat /update/iso/ramdisk.img | cpio -id > /dev/null
+	if [ -e /update/iso/system.sfs ]; then
+	    mountpoint -q /update/sfs && umount /udpate/sfs
+		[[ -d /update/sfs ]] || mkdir -p /update/sfs
+		mount -o loop /update/iso/system.sfs /update/sfs
+		mount -o loop /update/sfs/system.img /update/system
+	elif [ -e /update/iso/system.img ]; then
 		mount -o remount,rw foo /update
-		mount -o loop /update/$SRC/system.img system
-	elif [ -d /update/$SRC/system ]; then
+		mount -o loop /update/iso/system.img /update/system
+	elif [ -d /update/iso/system ]; then
 		mount -o remount,rw foo /update
-		mount --bind /update/$SRC/system system
+		mount --bind /update/iso/system /update/system
 	else
 		rm -rf *
 		return 1
 	fi
-	mkdir mnt
+	mkdir /update/mnt
 	echo " found at $1"
-	#rm /sbin/mke2fs
-	#hash -r
 }
 
 update_to()
@@ -70,26 +65,16 @@ update_to()
 
 	cd /
 
-	if [ !\( mountpoint -q /mnt -a -a /mnt/android*/kernel \) ];then
+	if [ !\( mountpoint -q /mnt -a -a $1/kernel \) ]; then
 		dialog --clear --title " Error " --defaultno --yesno \
 			"\n Cannot find OPENTHOS partition \n" 8 37
-
 		return 255
 	fi
 
-
 	fs=`cat /proc/mounts | grep '/android/system' | awk '{ print $3 }'`
 
-###
-#add GRUB entry
-# Done in install/1-install
-#add EFI GRUB2 entry
-# Done in install/1-install
-
-#system ...
-
-	files="update/$SRC/kernel update/$SRC/initrd.img update/$SRC/ramdisk.img"
-	sysimg="update/system"
+	files="/udpate/iso/kernel /update/iso/initrd.img update/iso/ramdisk.img"
+	sysimg="/update/system"
 	files="$files $sysimg"
 
 	size=0
@@ -97,31 +82,48 @@ update_to()
 		size=$(($size+$s))
 	done
 
+   
+    if [ $1 == $newadir ]; then
+        dialog --infobox "\n update $newadir itself..." 5 27
+        mv $newadir/data $newadir-data
+    fi
+    
 	rm -rf $newadir/*
+	
 	mkdir -p $newadir
+	
 	cd $newadir
 
-	( ( cd /; find $files | cpio -H newc -o ) | pv -ns ${size}k | ( cpio -iud > /dev/null; echo $? > /tmp/result )) 2>&1 \
+	(( cd /update/iso; find $files | cpio -H newc -o ) | pv -ns ${size}k | ( cpio -iud > /dev/null; echo $? > /tmp/result )) 2>&1 \
 		| progress_bar "Update Newest OPENTHOS" "Expect to write $size KB..."
 	result=$((`cat /tmp/result`*255))
 
-	if [ $result -eq 0 ]; then
-		for d in update sfs ./$SRC; do
-			[ -d $d ] && mv $d/* . && rmdir $d
-		done
-		chown 0.0 *
-		for f in *; do
-			[ -d $f ] || chmod 644 $f
-		done
+	#chyyuu: What's the meaning of below codes of 9 lines???
+#	if [ $result -eq 0 ]; then
+#		for d in /update /update/sfs /udate/iso; do
+#			[ -d $d ] && mv $d/* . && rmdir $d
+#		done
+#		chown 0.0 *
+#		for f in *; do
+#			[ -d $f ] || chmod 644 $f
+#		done
+#	fi
 
+    mkdir -p $newadir/data
+    if [ $1 != $newadir ]; then
+	   cp -af $1/data/* $newadir/data/
+	else
+	   cp -af $newadir-data/* $newadir/data/
+	   rm -rf $newadir-data/
 	fi
-
-	#ln -s ../data ./data
-	cp -af ../data ./
+	   
     # clean some old cache
 	dialog --infobox "\n Clean Old Cache..." 5 27
-    rm -rf ./data/dalvik-cache/* ./data/system/wpa_supplicant
-
+	#rm nouesed os iso img
+	rm -rf $newadir/data/media/0/System_OS/
+    #rm some old cache files
+    rm -rf $newadir/data/dalvik-cache/* $newadir/data/system/wpa_supplicant
+    # sync data to disk
 	dialog --infobox "\n Syncing to disk..." 5 27
 	sync
 
@@ -130,23 +132,23 @@ update_to()
 
 do_update()
 {
-newadir="/mnt/androidnewest"
+	echo do_update ...
+	
+	newadir="/mnt/androidnewest"
 
-mkdir /update
-mount -t tmpfs tmpfs /update
-cd /update
+	mkdir /update
+	mount -t tmpfs tmpfs /update
+	cd /update
 
-check_update_root $iso_file
+	check_update_root $iso_file
 
-if [ -e /update/iso/install.img ];then
-
-zcat /update/iso/install.img | ( cd /; cpio -iud > /dev/null )
-busybox modprobe atkbd
-
-else
-	echo "Cannot find install.img "
-	return 1
-fi
+	if [ -e /update/iso/install.img ]; then
+    	zcat /update/iso/install.img | ( cd /; cpio -iud > /dev/null )
+    	busybox modprobe atkbd
+	else
+		echo "Cannot find install.img "
+		return 1
+	fi
 
 	dialog --title " Confirm " --no-label Skip --defaultno --yesno \
 		"\n Do you want to using newest OPENTHOS ?" 7 47
@@ -154,50 +156,59 @@ fi
 		return 1
 	fi
 
-retval=1
+	retval=1
 
-choice=""
-update_to $choice
-retval=$?
+	update_to $1
 
-if [ $retval -eq 255 ]; then
-	dialog --title ' Error! ' --yes-label Retry --no-label Reboot \
-		--yesno '\n Update failed! Please check enough free disk space to update newest OPENTHOS.' 8 51
-[ $? -eq 1 ] && rebooting
-fi
+	retval=$?
 
-if [ -e $adir/kernel ];then
-	mv $detect_file ${detect_file}.old
-	rebooting
-fi
+	if [ $retval -eq 255 ]; then
+		dialog --title ' Error! ' --yes-label Retry --no-label Reboot \
+			--yesno '\n Update failed! Please check enough free disk space to update newest OPENTHOS.' 8 51
+		[ $? -eq 1 ] && rebooting
+	fi
 
-return 1;
+	if [ -e $adir/kernel ]; then
+		mv $detect_file ${detect_file}.old
+		dialog --title " Question " --yesno \
+	    	  "\nFound $adir install NEWEST $iso_name now.\nWould you like to rebooting?" 8 55
+		if [ $? -eq 0 ]; then	    
+	     	rebooting
+    	fi
+	fi
+
+    return 1;
 
 }
 
 update_detect()
 {
 
-	if [ !\( mountpoint -q /mnt -a -e /mnt/android*/kernel \) ];then
+	echo update_detect ....
+	
+	if [ !\( mountpoint -q /mnt -a -e /mnt/android*/kernel \) ]; then
 		echo "Cannot find OPENTHOS partition "
-
 		return 255
 	fi
-	adir=`dirname /mnt/android-*/kernel`
+	
+	ADIRS=`dirname /mnt/android*/kernel`
+	echo $ADIRS
+    for adir in $ADIRS; do
+	    detect_file="$adir/data/media/0/System_OS/update"
+	    iso_name=$(tac $detect_file | sed -n 2p )
+	    iso_file=$(dirname $detect_file)/$iso_name
+	    #iso_file="system.iso"
 
-	detect_file="$adir/data/media/0/System_OS/update"
-
-	iso_name=$(tac $detect_file | sed -n 2p )
-	iso_file=$(dirname $detect_file)/$iso_name
-	#iso_file="system.iso"
-
-	value=`tail -n 1 $detect_file`
-	if [ "$value"x = "1"x -a -e $iso_file ]; then
-	echo "Update OPENTHOS "
-	do_update
-	fi
-
+	     value=`tail -n 1 $detect_file`
+	     if [ "$value"x = "1"x -a -e $iso_file ]; then
+	         echo "Update newest OPENTHOS $iso_file... "
+#			 dialog --title " Question " --yesno \
+#				    "\nFound $adir has NEWEST $iso_name.\nWould you like to install it?" 8 55
+#			 if [ $? -eq 0 ]; then	    
+	         	do_update $adir
+#	         fi
+	     fi
+    done
 	echo "No Update "
-
 }
 

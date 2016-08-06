@@ -33,6 +33,8 @@ choose()
 
 partition_drive()
 {
+	echo partition_drive ...
+	
 	echo -n > $menufile
 	for i in /sys/block/[shv]d[a-z] /sys/block/mmcblk?; do
 		if [ ! -d $i ]; then  # pathname expansion failed
@@ -79,6 +81,8 @@ partition_drive()
 
 select_dev()
 {
+	echo select_dev ...
+	
 	blkid | grep -v -E "^/dev/block/|^/dev/loop" | cut -b6- | sort | awk '{
 		t="unknown"
 		for (i = NF; i > 1; --i)
@@ -163,7 +167,7 @@ create_newest_entry()
 {
 	title=$1
 	shift
-	echo -e "title $title\n\tkernel /$newasrc/kernel$vga $@ SRC=/$asrc\n\tinitrd /$newasrc/initrd.img\n" >> $menulst
+	echo -e "title $title\n\tkernel /$newasrc/kernel$vga $@ SRC=/$newasrc\n\tinitrd /$newasrc/initrd.img\n" >> $menulst
 }
 
 
@@ -173,11 +177,9 @@ create_menulst()
 	[ -n "$VESA" ] && vga=" vga=788 modeset=0"
 	echo -e "${GRUB_OPTIONS:-default=0\ntimeout=6\nsplashimage=/grub/android-x86.xpm.gz\n}root (hd0,$1)\n" > $menulst
 
-	create_entry "OPENTHOS $VER" console=ttyS0 $cmdline
+	create_entry "OPENTHOS $VER" $cmdline
 	create_entry "OPENTHOS $VER (Debug mode)" $cmdline console=ttyS0 DEBUG=2
-	create_entry "OPENTHOS $VER (Debug nomodeset)" nomodeset $cmdline console=ttyS0 DEBUG=2
-	create_entry "OPENTHOS $VER (Debug video=LVDS-1:d)" video=LVDS-1:d $cmdline console=ttyS0 DEBUG=2
-	create_newest_entry "OPENTHOS Newest" console=ttyS0 $cmdline
+	create_newest_entry "OPENTHOS Newest" $cmdline
 	create_Newest_entry "OPENTHOS Newest (Debug mode)" $cmdline console=ttyS0 DEBUG=2
 }
 
@@ -232,6 +234,8 @@ create_data_img()
 
 try_upgrade()
 {
+	echo try_upgrade ...
+	
 	PREV_VERS="2016-* 2017-* 2018-*"
 	for v in $PREV_VERS; do
 		PREV_OSES=hd/android-$v
@@ -259,7 +263,9 @@ try_upgrade()
 				    	              sed -i 's/\(ctrl_interface=\)\(.*\)/\1wlan0/' $1/data/misc/wifi/wpa_supplicant.conf
 				    	              break 2		    					                  
 					             else
-					                  continue					                  
+					                  continue
+					             fi
+					        fi     					                  
 					    else
 					        echo $prev_os "!=" $1 "and no" $1 "DIR"
 				    	    mv $prev_os $1
@@ -298,6 +304,8 @@ get_part_info()
 
 install_to()
 {
+	echo install_to ...
+
 	cd /
 	mountpoint -q /hd && umount /hd
 	while [ 1 ]; do
@@ -345,9 +353,8 @@ install_to()
 		echo -e "menuentry \"OPENTHOS $VER\" {\n\tsearch --set=root --file /$asrc/kernel\n\tlinuxefi /$asrc/kernel quiet $cmdline \n\tinitrdefi /$asrc/initrd.img\n}" >> $grubcfg
 		echo -e "menuentry \"OPENTHOS $VER (DEBUG mode)\" {\n\tsearch --set=root --file /$asrc/kernel\n\tlinuxefi /$asrc/kernel $cmdline DEBUG=2\n\tinitrdefi /$asrc/initrd.img\n}" >> $grubcfg
 #add newest updated OPENTHOS entry
-		newasrc=androidnewest
-		echo -e "menuentry \"OPENTHOS Newest\" {\n\tsearch --set=root --file /$newasrc/kernel\n\tlinuxefi /$asrc/kernel quiet $cmdline \n\tinitrdefi /$newasrc/initrd.img\n}" >> $grubcfg
-		echo -e "menuentry \"OPENTHOS Newest (DEBUG mode)\" {\n\tsearch --set=root --file /$newasrc/kernel\n\tlinuxefi /$asrc/kernel quiet $cmdline DEBUG=2\n\tinitrdefi /$newasrc/initrd.img\n}" >> $grubcfg		
+		echo -e "menuentry \"OPENTHOS Newest\" {\n\tsearch --set=root --file /$newasrc/kernel\n\tlinuxefi /$newasrc/kernel quiet $cmdline \n\tinitrdefi /$newasrc/initrd.img\n}" >> $grubcfg
+		echo -e "menuentry \"OPENTHOS Newest (DEBUG mode)\" {\n\tsearch --set=root --file /$newasrc/kernel\n\tlinuxefi /$newasrc/kernel quiet $cmdline DEBUG=2\n\tinitrdefi /$newasrc/initrd.img\n}" >> $grubcfg		
 
 		if [ -e /hd/EFI/Microsoft/Boot/bootmgfw.efi ]; then
 			echo -e "menuentry \"Windows (UEFI)\" {\n\tsearch --set=root --file /EFI/Microsoft/Boot/bootmgfw.efi\n\tchainloader /EFI/Microsoft/Boot/bootmgfw.efi\n}" >> $grubcfg
@@ -375,7 +382,9 @@ install_to()
 	for s in `du -sk $files | awk '{print $1}'`; do
 		size=$(($size+$s))
 	done
+	
 	try_upgrade hd/$asrc
+	
 	mkdir -p hd/$asrc
 	cd hd/$asrc
 	rm -rf system*
@@ -383,6 +392,7 @@ install_to()
 		| progress_bar "Installing OPENTHOS" "Expect to write $size KB..."
 	result=$((`cat /tmp/result`*255))
 
+	#chyyuu: What's the meaning of below codes of 7???
 	if [ $result -eq 0 ]; then
 		for d in android mnt sfs ./$SRC; do
 			[ -d $d ] && mv $d/* . && rmdir $d
@@ -410,6 +420,8 @@ install_to()
 
 install_hd()
 {
+	echo install_hd ...
+
 	select_dev || rebooting
 	retval=1
 	case "$choice" in
@@ -430,6 +442,9 @@ install_hd()
 
 do_install()
 {
+	echo do_install ...
+    # for newest android boot entry
+	newasrc=androidnewest
 	until install_hd; do
 		if [ $retval -eq 255 ]; then
 			dialog --title ' Error! ' --yes-label Retry --no-label Reboot \

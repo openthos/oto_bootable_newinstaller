@@ -179,6 +179,7 @@ if [ 0$DEBUG -gt 0 ]; then
 fi
 
 # load scripts
+echo Load Scripts.....
 for s in `ls /scripts/* /src/scripts/*`; do
 	test -e "$s" && source $s
 done
