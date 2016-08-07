@@ -199,13 +199,11 @@ update_detect()
 		return 255
 	fi
 	
-	ADIRS=`dirname /mnt/android*/kernel`
-	echo $ADIRS
-    for adir in $ADIRS; do
-	    detect_file="$adir/data/media/0/System_OS/update"
+    for adir in /mnt/android* ; do
+        detect_dir=$adir/data/media/0/System_OS
+	    detect_file=$detect_dir/update
 	    iso_name=$(tac $detect_file | sed -n 2p )
-	    iso_file=$(dirname $detect_file)/$iso_name
-	    #iso_file="system.iso"
+	    iso_file=$detect_dir/$iso_name
 
 	     value=`tail -n 1 $detect_file`
 	     if [ "$value"x = "1"x -a -e $iso_file ]; then
