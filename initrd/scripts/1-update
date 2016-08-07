@@ -102,22 +102,29 @@ update_to()
     cp f /update/iso/initrd.img   $newadir/
     cp f /update/iso/ramdisk.img  $newadir/   
     cp -af /update/system         $newadir/    
-   
 
-
-    mkdir -p $newadir/data
+    #restore data dir
     if [ $1 != $newadir ]; then
+       # two different dirs, so copy contents.
+       mkdir -p $newadir/data
 	   cp -af $1/data/* $newadir/data/
 	else
-	   cp -af $newadir-data/* $newadir/data/
-	   rm -rf $newadir-data/
+	   #same dirs, so just rename it 
+	   #echo $newadir-data $newadir/data
+	   mv $newadir-data $newadir/data
 	fi
 	   
     # clean some old cache
 	dialog --infobox "\n Clean Old Cache..." 5 27
 	sleep 1
-	#rm nouesed os iso img
-	rm -rf $newadir/data/media/0/System_OS/
+	
+	#if $1!=$newadir, rm nouesed os iso img, else remain it.
+    if [ $1 != $newadir ]; then	
+	    rm -rf $newadir/data/media/0/System_OS/
+	else
+	    echo "update the same os location, remain update iso."
+	fi
+	
     #rm some old cache files
     rm -rf $newadir/data/dalvik-cache/* $newadir/data/system/wpa_supplicant
     # sync data to disk
@@ -133,6 +140,9 @@ do_update()
 	
 	newadir="/mnt/androidnewest"
 
+    # clean some unconcerned noused dir, which are maybe  failed update datas.
+    #rm -rf /mnt/android*-data
+    
 	mkdir /update
 	mount -t tmpfs tmpfs /update
 	cd /update
