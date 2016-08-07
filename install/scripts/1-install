@@ -413,6 +413,7 @@ install_to()
 	fi
 
 	dialog --infobox "\n Syncing to disk..." 5 27
+	sleep 1
 	sync
 
 	return $result
