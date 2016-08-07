@@ -92,6 +92,7 @@ update_to()
     
     if [ $1 == $newadir ]; then
         dialog --infobox "\n update $newadir itself..." 5 27
+        sleep 1
         mv $newadir/data $newadir-data
     fi
         
@@ -114,6 +115,7 @@ update_to()
 	   
     # clean some old cache
 	dialog --infobox "\n Clean Old Cache..." 5 27
+	sleep 1
 	#rm nouesed os iso img
 	rm -rf $newadir/data/media/0/System_OS/
     #rm some old cache files
@@ -146,8 +148,11 @@ do_update()
 	fi
 
 	dialog --title " Confirm " --no-label Skip --defaultno --yesno \
-		"\n Do you want to using newest OPENTHOS ?" 7 47
+		"\n Want to update newest OPENTHOS in $iso_file ?" 7 47
 	if [ $? -ne 0 ]; then
+	    # don't want to update, change update file's last line conetent to -1
+		sed -i '$d' $detect_file
+        echo -1 >>$detect_file
 		return 1
 	fi
 
@@ -158,16 +163,24 @@ do_update()
 	retval=$?
 
 	if [ $retval -eq 255 ]; then
+	    # update failed. change update file's last line conetent to -2
+		sed -i '$d' $detect_file
+        echo -2 >>$detect_file
+        	
 		dialog --title ' Error! ' --yes-label Retry --no-label Reboot \
 			--yesno '\n Update failed! Please check enough free disk space to update newest OPENTHOS.' 8 51
 		[ $? -eq 1 ] && rebooting
 	fi
 
 	if [ -e $adir/kernel ]; then
-		mv $detect_file ${detect_file}.old
+	    
+	    # update complete. change update file's last line conetent to 0
+		sed -i '$d' $detect_file
+        echo 0 >>$detect_file
+        
 		dialog --title " Question " --yesno \
-	    	  "\nFound $adir install NEWEST $iso_name now.\nWould you like to rebooting?" 8 55
-		if [ $? -eq 0 ]; then	    
+	    	  "\n Finished updateing $iso_name.\nWould you like to rebooting?" 8 55
+		if [ $? -eq 0 ]; then
 	     	rebooting
     	fi
 	fi
@@ -196,12 +209,8 @@ update_detect()
 
 	     value=`tail -n 1 $detect_file`
 	     if [ "$value"x = "1"x -a -e $iso_file ]; then
-	         echo "Update newest OPENTHOS $iso_file... "
-#			 dialog --title " Question " --yesno \
-#				    "\nFound $adir has NEWEST $iso_name.\nWould you like to install it?" 8 55
-#			 if [ $? -eq 0 ]; then	    
-	         	do_update $adir
-#	         fi
+	         echo "Update newest OPENTHOS $iso_file... "   
+	         do_update $adir
 	     fi
     done
 	echo "No Update "
