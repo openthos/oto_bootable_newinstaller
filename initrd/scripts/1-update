@@ -136,6 +136,7 @@ update_to()
 
 do_update()
 {
+
 	echo do_update ...
 	
 	newadir="/mnt/androidnewest"
@@ -208,6 +209,7 @@ update_detect()
 		echo "Cannot find OPENTHOS partition "
 		return 255
 	fi
+	
 	
     for adir in /mnt/android* ; do
         detect_dir=$adir/data/media/0/System_OS
