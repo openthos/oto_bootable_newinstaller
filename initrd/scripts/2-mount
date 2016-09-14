@@ -9,6 +9,24 @@
 
 mount_data()
 {
+	if [ -n "$BOTO" ]; then
+		mountpoint -q data&&umount data
+		type=`blkid |grep $DATA|awk -F "\"" '{print $6;}'`
+		disk=`blkid |grep $DATA|awk -F ":" '{print $1;}'`
+		if [ $type = "ntfs" ];then
+			mkdir /tmp/ntfs
+			ntfs-3g  $disk /tmp/ntfs
+			if [ ! -d /tmp/ntfs/openthos ];then
+				mkdir /tmp/ntfs/openthos
+				mount -o bind /tmp/ntfs/openthos /android/data
+				umount /tmp
+				return 0
+			fi
+			mount -o loop /tmp/ntfs/openthos/data.img /android/data
+			umount /tmp
+			return 0
+		fi
+	fi
 	mountpoint -q data && return
 	[ -n "$DATA" ] && blk=`basename $DATA` || blk=
 	if [ -b "/dev/$blk" ]; then

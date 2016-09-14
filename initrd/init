@@ -143,10 +143,14 @@ done
 
 mount -t tmpfs tmpfs /android
 cd /android
+disk_list="g f e d c b a"
 while :; do
-	for device in ${ROOT:-/dev/[hmsv][dmr][0-9a-z]*}; do
-		check_root $device && break 2
-		mountpoint -q /mnt && umount /mnt
+       for disk in $disk_list
+       do
+               for device in ${ROOT:-/dev/[hmsv][dmr]$disk*}; do
+                       check_root $device && break 3
+                       mountpoint -q /mnt && umount /mnt
+               done
 	done
 	sleep 1
 	echo -n .
@@ -189,6 +193,7 @@ done
 # return 1 if it wants to use auto_detect
 [ "$AUTO" != "1" ] && detect_hardware && FOUND=1
 
+[ -n "$INSTALL" -a -n "$BOTO" ] && do_install_boto
 [ -n "$INSTALL" ] && do_install
 
 # OPENTHOS upgrade
@@ -214,7 +219,6 @@ if [ 0$DEBUG -gt 1 ]; then
 
 	debug_shell debug-late
 fi
-
 [ -n "$DEBUG" ] && SWITCH=${SWITCH:-chroot}
 
 # We must disable mdev before switching to Android

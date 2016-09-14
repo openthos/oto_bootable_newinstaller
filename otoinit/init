@@ -1,0 +1,553 @@
+#!/bin/busybox sh
+
+################################################################################
+# last update on 2016-9-28
+# update by jianxing<wangjianxing5210@163.com> on 2016-9-8
+# update by David Chan<chanuei@sina.com> on 2016-8-25
+# License:GPL V2 
+
+  DEBUG=1
+
+#  CMDLINE=/tmp/cmdline
+  CMDLINE=/proc/cmdline
+  
+#  echo "BOOT_MODE=hdimgboot" >$CMDLINE
+#  echo "RAMDISK_HD_UUID=fe2be1f5-50e0-4bdd-bf33-53dd0ffba119" >>$CMDLINE
+#  echo "RAMDISK_IMG=OpenThos/ramdisk.img" >>$CMDLINE
+#  echo "SYSTEM_HD_UUID=fe2be1f5-50e0-4bdd-bf33-53dd0ffba119" >>$CMDLINE
+#  echo "SYSTEM_IMG=OpenThos/system.sfs" >>$CMDLINE
+#  echo "DATA_HD_UUID=fe2be1f5-50e0-4bdd-bf33-53dd0ffba119" >>$CMDLINE
+#  echo "DATA_IMG=OpenThos/data.img" >>$CMDLINE
+
+
+debug_shell()
+{
+	pushd
+	if [ -e system/bin/sh ] && [ -x system/bin/sh ]; then
+		echo Running MirBSD Korn Shell...
+		USER="($1)" system/bin/sh -l 2>&1
+	else
+		echo Running busybox ash...
+		sh 2>&1
+	fi
+	popd
+}
+
+  echo "Init Script Enter..."
+  
+# Begin: Early init
+# ==============================================================================  
+  echo ""
+  echo "Stage early init start..."
+  readonly ANDROID_DIR="/android"
+  readonly LIVEMEDIA_DIR="/mnt/livemedia"
+  
+  PATH=/sbin:/bin:/system/bin:/system/xbin; export PATH
+
+if [ ! "$HAS_CTTY" = "YES" ]; then
+
+  
+  echo "Early Init: Busybox installing..."
+  busybox mount -t proc proc /proc
+  busybox mount -t sysfs sysfs /sys
+
+  busybox mount -t tmpfs tmpfs /android
+
+  busybox mount -t tmpfs tmpfs /tmp
+  busybox --install -s
+  echo "Early Init: Busybox installed."
+
+  mknod /dev/tty c 5 0
+  mknod /dev/console c 5 1
+  mknod /dev/tty2 c 4 2 && openvt
+  mknod /dev/tty3 c 4 3 && openvt
+#  ::respawn:/sbin/getty 38400 tty1
+#  ::respawn:/sbin/getty 38400 tty2
+#  ::respawn:/sbin/getty 38400 tty3  
+  
+  mkdir -p /dev/block
+  echo "Early Init: Devices enumerating..."
+  echo /sbin/mdev > /proc/sys/kernel/hotplug
+  mdev -s
+
+  echo "Early Init: Devices enumerated."
+exec env HAS_CTTY=YES setsid cttyhack /bin/sh "$0" "$@"
+  
+fi
+  
+  echo "Stage early init finished."
+  
+# End: Early init
+# ------------------------------------------------------------------------------
+
+
+# Begin: Function definition
+# ==============================================================================  
+ 
+  #----------------------------------
+  # by: David Chan (chanuei@sina.com)
+  # date: 2016-08-27
+  #
+  # Func: dirs  
+  dirs()
+  {
+    local OLDIFS="$IFS"
+    IFS=":"
+  
+    for i in $_DIRSTACK
+    do
+      printf "$i \t"
+    done
+    
+    printf "\n"
+    
+    IFS="$OLDIFS"
+  }
+  
+  #----------------------------------
+  # by: David Chan (chanuei@sina.com)
+  # date: 2016-08-27
+  #
+  # Func: pushd
+  # Param:
+  #   $1, directory to be pushed
+  pushd()
+  {
+    local REQ="$1"
+    REQ="${REQ:-.}"
+    if [ ! -d $REQ ]; then
+      echo "PUSHD Failed: You've tried to pushd a non-directory $REQ."
+      return 1
+    fi
+    
+    if cd "$REQ"; then
+      _DIRSTACK="`pwd`:$_DIRSTACK"
+      dirs
+      return 0
+    else
+      echo "PUSHD Failed: Cannot chang to directory $REQ."
+      return 1
+    fi
+  }
+  
+  #----------------------------------
+  # by: David Chan (chanuei@sina.com)
+  # date: 2016-08-27
+  #
+  # Func: popd
+  # Param:
+  popd()
+  {
+    _DIRSTACK=$_DIRSTACK
+    
+    if [ -z "$_DIRSTACK" ]; then
+        echo "POPD: Directory stack is empty."
+        return 1
+    fi
+    
+    if cd `echo $_DIRSTACK | cut -d: -f1`; then
+      dirs
+#      _DIRSTACK=`echo $_DIRSTACK | cut -d: -f1 --complement`
+      semiPos=`expr index $_DIRSTACK ":"`
+      let semiPos=$semiPos+1
+      _DIRSTACK=`echo $_DIRSTACK | cut -b$semiPos-`
+      return 0
+    else
+      echo "POPD: change directory failed !"
+      return 1
+    fi
+  }
+
+  #----------------------------------
+  # by: David Chan (chanuei@sina.com)
+  # date: 2016-08-31
+  #
+  # Func: get_param_from_bootargs
+  # Param:
+  #   $1, nameParam of the param to be found from /proc/cmdline
+  get_param_from_bootargs()
+  {
+    if [ "$#" -ne 1 ]; then
+      echo "get_param_from_bootargs: The func should be called with 1 parameters, but $# parameters found"
+      return $ERROR_PARMETER
+    fi
+    
+    for c in `cat $CMDLINE`; do
+      case $c in
+      $1=*)
+        local tempParam="$(echo $c | cut -d"=" -f2)"
+        if [ -n "$tempParam" ]; then
+          eval $1=$tempParam
+          return $VALUE_FOUND
+        fi
+        ;;
+      *)
+        ;;
+      esac
+    done
+    
+    echo "get_param_from_bootargs: No value for $1 found"
+    return $VALUE_MISS        
+  }
+  
+  #----------------------------------
+  # by: David Chan (chanuei@sina.com)
+  # date: 2016-08-31
+  #
+  # Func: get_hd_fstype
+  # Param:
+  #   $1, UUID of the partition to detect FS Type
+  #   $2, fsType found.
+  get_hd_fstype()
+  {
+    if [ "$#" -ne 2 ]; then
+      echo "GET_HD_FSTYPE: The func should be called with 2 parameters, but $# parameters found"
+      return $ERROR_PARMETER
+    fi
+    
+    eval $2="$(for c in `blkid | grep -m 1 -i $1`; do echo $c | grep -i "TYPE" | cut -b6-; done)"
+  }
+  
+  #----------------------------------
+  # by: David Chan (chanuei@sina.com)
+  # date: 2016-08-31
+  #
+  # Func: mount_part_via_uuid
+  # Param:
+  #   $1, uuid of the part to be loaded.
+  #   $2, mountpoint, the part to be mounted to.
+  #   $3, options, "ro" "rw" etc.
+  mount_part_via_uuid()
+  {
+    if [ "$#" -ne 3 ] && [ "$#" -ne 2 ]; then
+      echo "mount_part_via_uuid: The func should be called with 2 parameters, but $# parameters found"
+      return $ERROR_PARMETER
+    fi
+    
+    if [ ! -d "$2" ]; then
+      mkdir -p $2
+    fi
+    local fsType
+    get_hd_fstype $1 fsType
+    if [ $?=$PARAM_FOUND ] && [ "$#" -eq 3 ]; then
+      local varMountOption="-o $3"
+    fi
+echo "fsType for $1 is $fsType"
+    if [ "$fsType" = "ntfs" ] || [ "$fsType" = "NTFS" ]; then
+      hdPart="$(for c in `blkid | grep -m 1 -i $1`; do	echo $c | grep -i "/dev" | cut -d":" -f1; done)"
+echo "mount.ntfs-3g $hdPart $2"
+      mount.ntfs-3g $hdPart $2
+    else
+echo "mount -t $fsType $varMountOption UUID=$1 $2"
+      mount -t $fsType $varMountOption UUID=$1 $2
+    fi
+  }
+  
+  #----------------------------------
+  # by: David Chan (chanuei@sina.com)
+  # date: 2016-08-31
+  #
+  # Func: mount_os_img
+  # Param:
+  #   $1, ImageClass of the os image to be loaded. Could be:
+  #       RAMDISK, SYSTEM, DATA, INSTALL, RECOVERY, UPDATE.
+  #   $2, ImageName of the os image to be loaded, with suffix ".img" or ".sfs".
+  #       Such as "system.sfs" or "data.img".
+  #   $3, options
+  mount_os_img()
+  {
+    if [ "$#" -ne 3 ] && [ "$#" -ne 2 ]; then
+      echo "mount_os_img: The func should be called with 2 parameters, but $# parameters found"
+      return $ERROR_PARMETER
+    fi
+    
+    local osImageOwnerDir="$(echo "/mnt/$1" | tr '[:upper:]' '[:lower:]')"
+    if [ ! -d "$osImageOwnerDir" ]; then
+      mkdir -p $osImageOwnerDir
+    else
+      mountpoint -q $osImageOwnerDir
+      if [ $? -eq 0 ]; then
+        umount $osImageOwnerDir
+      fi
+    fi
+    
+    local varUuidClass="$1_HD_UUID"
+    get_param_from_bootargs $varUuidClass
+    
+    local varUuid
+    eval varUuid='$'$varUuidClass
+    mount_part_via_uuid $varUuid $osImageOwnerDir
+    
+    local varImg=$osImageOwnerDir/$2
+    
+    if [ -e "$varImg" ]; then
+      case $1 in
+      RAMDISK)
+        pushd $ANDROID_DIR
+echo "zcat $varImg | cpio -id #> /dev/null"
+        zcat $varImg | cpio -id 2>&1
+        popd
+        ;;
+      SYSTEM | DATA)
+        if [ "$(echo $2 | rev | cut -d/ -f1 | cut -d. -f1 | rev)" = "sfs" ]; then
+          local sfsMountPoint="$(echo "/mnt/$1.sfs" | tr '[:upper:]' '[:lower:]')"
+          if [ ! -d "$sfsMountPoint" ]; then
+            mkdir -p "$sfsMountPoint"
+          else
+            mountpoint -q $sfsMountPoint
+            if [ $? -eq 0 ]; then
+              umount  $sfsMountPoint
+            fi
+          fi
+echo "mount -o loop $varImg $sfsMountPoint"
+          mount -o loop $varImg $sfsMountPoint
+          varImg=$sfsMountPoint/"$(echo $2 | rev | cut -d/ -f1 | cut -d. -f2 | rev)".img
+        elif [ "$(echo $2 | rev | cut -d/ -f1 | cut -d. -f1 | rev)" = "img" ]; then
+          :
+        else
+          echo "mount_os_img: $2 is not suffixed with \".img\" or \".sfs\""
+          return 1
+        fi
+        pushd $ANDROID_DIR
+        local imgMountPoint="$(echo "$1" | tr '[:upper:]' '[:lower:]')"
+        mount -o loop $varImg $imgMountPoint
+        popd
+        ;;
+      *)
+        ;;
+      esac
+
+    else
+      echo /$2 on disk UUID=$varUuid not found
+    fi    
+  }
+  
+  #----------------------------------
+  # by: David Chan (chanuei@sina.com)
+  # date: 2016-08-26
+  #
+  # Func: prepare_mountpoint
+  # Param:
+  #   $1, mountpoint to be prepared
+  prepare_mountpoint()
+  {
+    if [ ! -d "$1" ]; then
+      mkdir -p $1
+    else
+      mountpoint -q $1
+      if [ "$?" -eq "0" ]; then
+        umount $1
+      fi
+    fi  
+  }
+  
+  #----------------------------------
+  # by: David Chan (chanuei@sina.com)
+  # date: 2016-08-27
+  #
+  # Func: mount_live_media
+  mount_live_media()
+  {
+    local i=0
+    while [ $i -lt 20 ]; do
+      sleep 1s
+      blkid | grep "OTO_INSTDSK"
+      if [ $? -eq 0 ]; then
+        break
+      fi
+      let ++i
+    done
+
+    if [ $i -eq 20 ]; then
+      echo "Install meida should have label \"OTO_INSTDSK\", please make sure it's right" 
+      return 1
+    fi
+    
+    prepare_mountpoint $1
+    mount -t vfat LABEL="OTO_INSTDSK" $1
+    return 0
+  }
+# End: Function definition
+# ------------------------------------------------------------------------------
+
+# Begin: base init
+# ==============================================================================
+  echo "Stage init start..."
+  
+  echo "base init: boot mode detecting ..."
+  get_param_from_bootargs BOOT_MODE
+  echo "              BOOT_MODE is $BOOT_MODE"
+  
+  echo "detect upgrade..."
+  try_upgrade
+  case $BOOT_MODE in
+  install)
+    echo "base init: will boot OpenThos in install mode"
+    mount_live_media $LIVEMEDIA_DIR
+    zcat $LIVEMEDIA_DIR/OpenThos/install.img | cpio -id  # > /dev/null
+    insmod bin/atkbd.ko
+    #for s in `ls /scripts/*`; do
+#	test -e "$s" && source $s
+ #   done
+    ln -s /bin/mke2fs /bin/make_ext4fs
+    ln -s /bin/mkfs.fat /bin/mkdosfs
+    ln -s /bin/ntfs-3g /bin/mount.ntfs-3g
+    
+    
+    get_param_from_bootargs INST_MODE
+    if [ "$INST_MODE" = "hdimg" ]; then
+      source /scripts/2-boto_install
+      hdimg_install
+    else
+      source /scripts/1-install
+      hd_install
+    fi
+    ;;
+    
+  liveboot)
+    echo "base init: will boot OpenThos in live mode."
+    mount_live_media $LIVEMEDIA_DIR
+    
+    pushd $ANDROID_DIR
+    zcat $LIVEMEDIA_DIR/OpenThos/ramdisk.img | cpio -id  # > /dev/null
+    if [ -e "$LIVEMEDIA_DIR/OpenThos/system.img" ]; then
+      prepare_mountpoint $ANDROID_DIR/system
+      mount -o loop,ro $LIVEMEDIA_DIR/OpenThos/system.img system
+    elif [ -e  "$LIVEMEDIA_DIR/OpenThos/system.sfs" ]; then
+      prepare_mountpoint /mnt/system.sfs
+      mount -o loop $LIVEMEDIA_DIR/OpenThos/system.sfs /mnt/system.sfs
+      prepare_mountpoint $ANDROID_DIR/system
+      mount -o loop /mnt/system.sfs/system.img system
+    else
+      :
+    fi
+    popd
+    
+    prepare_mountpoint $ANDROID_DIR/data
+    mount -t tmpfs -o size=512M tmpfs $ANDROID_DIR/data
+    ;;
+    
+  hdimgboot)
+    echo "base init: will boot OpenThos from local disk images."
+
+    get_param_from_bootargs RAMDISK_IMG
+    mount_os_img RAMDISK $RAMDISK_IMG
+
+    get_param_from_bootargs SYSTEM_IMG
+    mount_os_img SYSTEM $SYSTEM_IMG
+
+    get_param_from_bootargs DATA_IMG
+    mount_os_img DATA $DATA_IMG
+    echo "detect upgrade..."
+    try_upgrade
+    ;;
+    
+  hdboot)
+    pushd $ANDROID_DIR
+
+    echo "base init: will boot OpenThos from local disk partitions."
+
+    get_param_from_bootargs RAMDISK_IMG
+    mount_os_img RAMDISK $RAMDISK_IMG
+    get_param_from_bootargs SYSTEM_HD_UUID
+    if [ -n "$SYSTEM_HD_UUID" ]; then
+      mount_part_via_uuid $SYSTEM_HD_UUID system
+    else
+      echo "base init: no SYSTEM_HD_UUID found, will try the default contents"
+    fi
+    
+    get_param_from_bootargs DATA_HD_UUID
+    if [ -n "$DATA_HD_UUID" ]; then
+      mount_part_via_uuid $DATA_HD_UUID data
+    else
+      echo "base init: no DATA_HD_UUID found, will try the default contents"
+    fi
+        
+    popd
+    echo "detect upgrade..."
+    try_upgrade
+    ;;
+    
+  *)
+    
+    ;;
+  esac
+  
+  
+  echo "Stage init finished."
+# End: init
+# ------------------------------------------------------------------------------
+
+# Begin: boot android
+# ==============================================================================
+  echo "Stage boot android start..."
+
+  pushd $ANDROID_DIR
+
+    ln -s /android/system /
+    ln -s /system/lib/firmware /system/lib/modules /lib
+
+  mv /bin /lib .
+  sed -i 's|\( PATH.*\)|\1:/bin|' init.environ.rc
+  rm /sbin/modprobe
+  busybox mv /sbin/* sbin
+  rmdir /sbin
+  ln -s android/bin android/lib android/sbin /
+  hash -r
+
+# ensure keyboard driver is loaded
+  busybox modprobe atkbd
+  
+#sh 2>&1
+
+if [ 0$DEBUG -gt 0 ]; then
+	echo -e "\nType 'exit' to continue booting...\n"
+	debug_shell debug-found
+fi
+
+# load scripts
+
+echo Load Scripts.....
+for s in `ls /scripts/* /src/scripts/*`; do
+	test -e "$s" && source $s
+done
+
+# OPENTHOS upgrade
+update_detect
+# Other normal steps
+load_modules
+#mount_data
+mount_sdcard
+setup_tslib
+setup_dpi
+#post_detect
+
+
+if [ -e /android/data/rec_reset ]; then
+   rm -rf /android/data/*
+   rm -rf /cache/*
+fi
+
+
+if [ 0$DEBUG -gt 1 ]; then
+	echo -e "\nUse Alt-F1/F2/F3 to switch between virtual consoles"
+	echo -e "Type 'exit' to enter Android...\n"
+
+	debug_shell debug-late
+fi
+[ -n "$DEBUG" ] && SWITCH=${SWITCH:-chroot}
+
+# We must disable mdev before switching to Android
+# since it conflicts with Android's init
+echo > /proc/sys/kernel/hotplug
+
+exec ${SWITCH:-switch_root} /android /init
+
+  
+  echo "Stage boot android finished."
+# End: boot android
+# ------------------------------------------------------------------------------
+
+while :; do
+  debug_shell fatal-err
+done

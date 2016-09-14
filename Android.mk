@@ -82,6 +82,7 @@ $(INITRD_RAMDISK): $(initrd_bin) $(systemimg) $(TARGET_INITRD_SCRIPTS) | $(ACP) 
 	ln -s /bin/ld-linux.so.2 $(TARGET_INSTALLER_OUT)/lib
 	mkdir -p $(addprefix $(TARGET_INSTALLER_OUT)/,android iso mnt proc sys tmp sfs hd)
 	echo "VER=$(VER)" > $(TARGET_INSTALLER_OUT)/scripts/00-ver
+	$(shell if [ -n $OTO_IMAGE ];then echo "cp $(initrd_dir)/../otoinit/init $(TARGET_INSTALLER_OUT)/init";fi)
 	$(MKBOOTFS) $(TARGET_INSTALLER_OUT) | gzip -9 > $@
 
 INSTALL_RAMDISK := $(PRODUCT_OUT)/install.img
@@ -117,16 +118,63 @@ $(EFI_IMAGE): $(wildcard $(LOCAL_PATH)/boot/efi/*/*) $(BUILT_IMG) $(ESP_LAYOUT) 
 	for s in `du -sk $^ | awk '{print $$1}'`; do \
 		size=$$(($$size+$$s)); \
         done; \
+	s=`du -sk $(<D)/../../../install/refind|awk '{print $$1}'`;size=$$(($$size+$$s)); \
 	size=$$(($$(($$(($$(($$(($$size + $$(($$size / 100)))) - 1)) / 32)) + 1)) * 32)); \
 	rm -f $@.fat; mkdosfs -n Android-x86 -C $@.fat $$size
 	$(hide) mcopy -Qsi $@.fat $(<D)/../../../install/grub2/efi $(BUILT_IMG) ::
+	$(hide) mcopy -Qsi $@.fat $(<D)/../../../install/refind ::
 	$(hide) mcopy -Qoi $@.fat $(@D)/grub.cfg ::efi/boot
 	$(hide) cat /dev/null > $@; $(edit_mbr) -l $(ESP_LAYOUT) -i $@ esp=$@.fat
 	$(hide) rm -f $@.fat
 
-.PHONY: iso_img usb_img efi_img
+# Note: copy from EFI_IMAGE
+ifneq ($(OTO_IMAGE),0)
+	BUILT_IMG := $(addprefix $(PRODUCT_OUT)/OpenThos/,ramdisk.img initrd.img install.img system.sfs)
+	BUILT_IMG += $(if $(TARGET_PREBUILT_KERNEL),$(TARGET_PREBUILT_KERNEL),$(PRODUCT_OUT)/OpenThos/kernel)
+endif
+REFIND=efi.tar.bz2
+OTO_IMAGE := $(PRODUCT_OUT)/$(TARGET_PRODUCT)_oto.img
+ESP_LAYOUT := $(LOCAL_PATH)/editdisklbl/esp_layout.conf
+$(OTO_IMAGE): $(wildcard $(LOCAL_PATH)/boot/efi/*/*) $(BUILT_IMG) $(ESP_LAYOUT) | $(edit_mbr)
+	$(shell if [ ! -d  $(@D)/OpenThos ];then mkdir $(@D)/OpenThos;fi)
+	@tar jcvf $(REFIND) -C $(<D)/../../../install/refind efi
+	@mv $(REFIND) $(PRODUCT_OUT)/OpenThos/
+	@cp $(BUILT_IMG) $(PRODUCT_OUT)/OpenThos/ -f
+	@echo $(<D)   $(@D)
+	$(hide) sed "s|VER|$(VER)|; s|CMDLINE|$(BOARD_KERNEL_CMDLINE)|" $(<D)/../../../otoinit/grub.cfg > $(@D)/grub.cfg
+	$(hide) size=0; \
+	for s in `du -sk $^ | awk '{print $$1}'`; do \
+		size=$$(($$size+$$s)); \
+        done; \
+	s=`du -sk $(@D)/OpenThos/$(REFIND)|awk '{print $$1}'`;size=$$(($$size+$$s)); \
+	size=$$(($$(($$(($$(($$(($$size + $$(($$size / 100)))) - 1)) / 32)) + 1)) * 32)); \
+	rm -f $@.fat; mkdosfs -n OTO_INSTDSK -C $@.fat $$size
+	$(hide) mcopy -Qsi $@.fat $(<D)/../../../install/grub2/efi $(PRODUCT_OUT)/OpenThos ::
+	$(hide) mcopy -Qoi $@.fat $(@D)/grub.cfg ::efi/boot
+	$(hide) cat /dev/null > $@; $(edit_mbr) -l $(ESP_LAYOUT) -i $@ esp=$@.fat
+	$(hide) rm -f $@.fat
+
+VERSION_FILE=$(LOCAL_PATH)/../../bootable/newinstaller/otoinit/version
+UPDATE_LIST=$(LOCAL_PATH)/../../bootable/newinstaller/otoinit/update_list
+UPDATE=openthos
+VERSION:=$(shell cat $(VERSION_FILE)|grep OpenThos|awk '{print $$2;}')
+
+define build-update-target
+	$(shell for c in `cat UPDATE_LIST`;then if [ $$c = "ramdisk" ];then UPDATE_IMAGE+="ramdisk.img")
+	$(if $(shell $(MKSQUASHFS) -version | grep "version [0-3].[0-9]"),\
+		$(error Your mksquashfs is too old to work with kernel 2.6.29. Please upgrade to squashfs-tools 4.0))
+	$(hide) $(MKSQUASHFS) $(1) $(2) -noappend
+endef
+UPDATE_IMG:= $(addprefix $(PRODUCT_OUT)/, $(shell cat $(UPDATE_LIST)))
+UPDATE_ZIP := $(PRODUCT_OUT)/$(UPDATE)_$(VERSION).zip
+$(UPDATE_ZIP): $(VERSION_FILE) $(UPDATE_LIST)
+	zip -qj $(UPDATE_ZIP) $(BUILT_IMG) $(VERSION_FILE) $(UPDATE_LIST)
+
+.PHONY: iso_img usb_img efi_img oto_img update_zip
 iso_img: $(ISO_IMAGE)
 usb_img: $(ISO_IMAGE)
 efi_img: $(EFI_IMAGE)
+oto_img: $(OTO_IMAGE)
+update_zip:$(UPDATE_ZIP)
 
 endif
