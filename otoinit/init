@@ -438,8 +438,6 @@ echo "mount -o loop $varImg $sfsMountPoint"
 
     get_param_from_bootargs DATA_IMG
     mount_os_img DATA $DATA_IMG
-    echo "detect upgrade..."
-    try_upgrade
     ;;
     
   hdboot)
@@ -464,8 +462,6 @@ echo "mount -o loop $varImg $sfsMountPoint"
     fi
         
     popd
-    echo "detect upgrade..."
-    try_upgrade
     ;;
     
   *)

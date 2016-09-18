@@ -144,6 +144,41 @@ format_fs()
 	fi
 }
 
+select_all_dev()
+{
+	echo select_all_dev ...
+	
+	blkid | grep -v -E "^/dev/block/|^/dev/loop" | cut -b6- | sort | awk '{
+		t="unknown"
+		for (i = NF; i > 1; --i)
+			if (match($i, "^TYPE")) {
+				t=$i
+				break
+			}
+		gsub(/TYPE=|"/, "", t)
+		printf("%s\t%s\n", $1, t)
+	}' > $tempfile
+
+	lsblk=`ls /sys/block | grep -v -E "loop|ram|sr|boot|rpmb"`
+	for d in $lsblk; do
+		p=0
+		for i in /sys/block/$d/$d* /sys/block/$d; do
+			[ -e $i/partition ] && p=1
+			[ $p -eq 1 -a "$i" = "/sys/block/$d" ] && break
+			echo $i | grep -q -E "boot|rpmb" && continue
+			[ -d $i ] && ( grep "`basename $i:`" $tempfile || echo "`basename $i` unknown" )
+		done
+	done | awk '{
+		sub(/:/, "", $1)
+		printf("\"%-13s%-17s", $1, $2)
+		system("cd /sys/block; for f in "$1"/device/model "$1"/device/name */"$1"/../device/model */"$1"/../device/name; do [ -e $f ] && echo -n `cat $f` && break; done")
+		printf("\" \"\"\n")
+	} END {
+		printf("\"Create/Modify partitions\" \"\"\n\"Detect devices\" \"\"")
+	}' > $menufile
+	choose "Choose Partition" "Please select a partition to install OPENTHOS EFI partition:"
+	return $retval
+}
 select_dev()
 {
 	echo select_dev ...
@@ -210,7 +245,7 @@ select_data_dev()
 		printf("\" \"\"\n")
 	} END {
 	}' > $menufile
-	choose "Choose Partition" "Please select a partition to install OPENTHOS DATA"
+	choose "Choose Partition" "Please select a partition to install OPENTHOS DATA partition"
 	return $retval
 }
 
@@ -331,7 +366,7 @@ boto_install_to()
 	asrc="OpenThos"
 
 	dialog --title " Confirm " --no-label Skip  --yesno \
-		"\n Do you want to install BOTO" 7 39
+		"\n Do you want to install OpenThos" 7 39
 	if [ $? -eq 0 ]; then
 		get_part_info $1
 		for i in /sys/block/$disk/$disk*; do         ##should use UUID
@@ -378,17 +413,17 @@ boto_install_to()
 	echo -e "\tinitrd OpenThos/initrd.img" >> $grubcfg
 	CMD="options \"quiet androidboot.hardware=android_x86_64 BOOT_MODE=hdimgboot RAMDISK_HD_UUID=$UUID RAMDISK_IMG=OpenThos/ramdisk.img SYSTEM_HD_UUID=$UUID SYSTEM_IMG=OpenThos/system.sfs"
 	#chyyuu: What's the meaning of below codes of 7???
-	if [ $result -eq 0 ]; then
-		for d in android mnt sfs ./$SRC; do
-			[ -d $d ] && mv $d/* . && rmdir $d
-		done
-		chown 0.0 *
-		for f in *; do
-			[ -d $f ] || chmod 644 $f
-		done
-
-	fi
-	#mv $d/kernel $d/otokernel
+	#if [ $result -eq 0 ]; then
+	#	for d in android mnt sfs ./$SRC; do
+	#		[ -d $d ] && mv $d/* . && rmdir $d
+	#	done
+	#	chown 0.0 *
+	#	for f in *; do
+	#		[ -d $f ] || chmod 644 $f
+	#	done
+#
+#	fi
+	#finish install openthos EFI partition
 	dialog --infobox "\n Syncing to disk..." 5 27
 	sleep 1
 	sync
@@ -460,11 +495,8 @@ boto_install_data_hd()
 	return $retval
 }
 
-hdimg_install()
+manual_install()
 {
-	echo do_install_boto ...
-    # for newest android boot entry
-	newasrc=androidnewest
 	until boto_install_hd; do
 		if [ $retval -eq 255 ]; then
 			dialog --title ' Error! ' --yes-label Retry --no-label Reboot \
@@ -482,4 +514,25 @@ hdimg_install()
 	#begin reboot system
 	sum=5;while [[ sum -gt 0 ]];do echo $sum;sum=`expr $sum - 1`;dialog --title " REBOOTING OPENTHOS" --infobox "\n        $sum" 7 30 ;sleep 1; done
 	rebooting
+	
+}
+auto_install()
+{
+	select_all_dev	
+}
+user_guide()
+{
+	dialog --title "Install OpenThos Guide" --yes-label Auto\ Install --no-label Manuall\ Install --yesno "Dear User:\nAbout the Install method:\n    If you're a hacker,you can try \"Manually Install\".\n    else maybe you choose the \"Auto Install\".\n\nProvide some default parameter as guideline for manual installtion.\n    1.OPENTHOS EFI partition\n    expect you choose 8G size as default for store system file.we don't change it normally\n\n    2.OPENTHOS DATA partition\n    expect you choose 100G size as default for store your private data" 25 70
+	[ $? -eq 1 ] && return 1
+}
+hdimg_install()
+{
+	echo do_install_boto ...
+	
+	user_guide 
+	if [ $? -eq 1 ];then	
+		manual_install
+	else 
+		auto_install
+	fi
 }

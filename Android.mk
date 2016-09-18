@@ -155,7 +155,7 @@ $(OTO_IMAGE): $(wildcard $(LOCAL_PATH)/boot/efi/*/*) $(BUILT_IMG) $(ESP_LAYOUT) 
 	$(hide) rm -f $@.fat
 
 VERSION_FILE=$(LOCAL_PATH)/../../bootable/newinstaller/otoinit/version
-UPDATE_LIST=$(LOCAL_PATH)/../../bootable/newinstaller/otoinit/update_list
+UPDATE_LIST=$(LOCAL_PATH)/../../bootable/newinstaller/otoinit/update.list
 UPDATE=openthos
 VERSION:=$(shell cat $(VERSION_FILE)|grep OpenThos|awk '{print $$2;}')
 
