@@ -120,8 +120,9 @@ fi
       return 1
     fi
     
+    local varPWD=`pwd`
     if cd "$REQ"; then
-      _DIRSTACK="`pwd`:$_DIRSTACK"
+      _DIRSTACK="$varPWD:_DIRSTACK"
       dirs
       return 0
     else
@@ -378,8 +379,8 @@ echo "mount -o loop $varImg $sfsMountPoint"
   get_param_from_bootargs BOOT_MODE
   echo "              BOOT_MODE is $BOOT_MODE"
   
-  echo "detect upgrade..."
-  try_upgrade
+  source /scripts/oto_update
+  openthos_update
   case $BOOT_MODE in
   install)
     echo "base init: will boot OpenThos in install mode"
@@ -428,6 +429,7 @@ echo "mount -o loop $varImg $sfsMountPoint"
     ;;
     
   hdimgboot)
+    openthos_update
     echo "base init: will boot OpenThos from local disk images."
 
     get_param_from_bootargs RAMDISK_IMG
@@ -508,8 +510,6 @@ for s in `ls /scripts/* /src/scripts/*`; do
 	test -e "$s" && source $s
 done
 
-# OPENTHOS upgrade
-update_detect
 # Other normal steps
 load_modules
 #mount_data

@@ -176,7 +176,7 @@ select_all_dev()
 	} END {
 		printf("\"Create/Modify partitions\" \"\"\n\"Detect devices\" \"\"")
 	}' > $menufile
-	choose "Choose Partition" "Please select a partition to install OPENTHOS EFI partition:"
+	choose "Choose Partition" "Please select a disk to install OPENTHOS:\nWarning:will earse all partition,please store your data"
 	return $retval
 }
 select_dev()
@@ -387,7 +387,7 @@ boto_install_to()
 		"\nDo you want to install /system directory as read only?" 10 61
 	instal_rw=$?
 	SRC="livemedia/OpenThos"
-	files="mnt/$SRC/kernel mnt/$SRC/initrd.img mnt/$SRC/ramdisk.img mnt/$SRC/system.*"
+	files="kernel initrd.img ramdisk.img system.*"
 	size=0
 	for s in `du -sk $files | awk '{print $1}'`; do
 		size=$(($size+$s))
@@ -398,7 +398,7 @@ boto_install_to()
 	mkdir -p hd/$asrc
 	cd hd/$asrc
 	rm -rf system*
-	( ( cd /; find $files | $CPIO -H newc -o ) | pv -ns ${size}k | ( $CPIO -iud > /dev/null; echo $? > /tmp/result )) 2>&1 \
+	( ( cd /mnt/$SRC/; find $files | $CPIO -H newc -o ) | pv -ns ${size}k | ( $CPIO -iu > /dev/null; echo $? > /tmp/result )) 2>&1 \
 		| progress_bar "Installing OPENTHOS" "Expect to write $size KB..."
 	result=$((`cat /tmp/result`*255))
 	#extract refind install zip
@@ -412,28 +412,16 @@ boto_install_to()
 	echo -e "\tloader OpenThos/kernel" >> $grubcfg
 	echo -e "\tinitrd OpenThos/initrd.img" >> $grubcfg
 	CMD="options \"quiet androidboot.hardware=android_x86_64 BOOT_MODE=hdimgboot RAMDISK_HD_UUID=$UUID RAMDISK_IMG=OpenThos/ramdisk.img SYSTEM_HD_UUID=$UUID SYSTEM_IMG=OpenThos/system.sfs"
-	#chyyuu: What's the meaning of below codes of 7???
-	#if [ $result -eq 0 ]; then
-	#	for d in android mnt sfs ./$SRC; do
-	#		[ -d $d ] && mv $d/* . && rmdir $d
-	#	done
-	#	chown 0.0 *
-	#	for f in *; do
-	#		[ -d $f ] || chmod 644 $f
-	#	done
-#
-#	fi
+
 	#finish install openthos EFI partition
 	dialog --infobox "\n Syncing to disk..." 5 27
 	sleep 1
 	sync
-
-	return $result
+	return 0
+	#return $result
 }
 boto_data_install_to()
 {
-	echo "store your data to..."
-
 	cd /
 	mkdir $MOUNT
 	while [ 1 ]; do
@@ -516,9 +504,9 @@ manual_install()
 	rebooting
 	
 }
+
 auto_install()
 {
-	select_all_dev	
 }
 user_guide()
 {
@@ -527,9 +515,8 @@ user_guide()
 }
 hdimg_install()
 {
-	echo do_install_boto ...
-	
-	user_guide 
+	echo do_install_boto ...	
+	user_guide
 	if [ $? -eq 1 ];then	
 		manual_install
 	else 
