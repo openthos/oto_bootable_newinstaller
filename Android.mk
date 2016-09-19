@@ -159,16 +159,10 @@ UPDATE_LIST=$(LOCAL_PATH)/../../bootable/newinstaller/otoinit/update.list
 UPDATE=openthos
 VERSION:=$(shell cat $(VERSION_FILE)|grep OpenThos|awk '{print $$2;}')
 
-define build-update-target
-	$(shell for c in `cat UPDATE_LIST`;then if [ $$c = "ramdisk" ];then UPDATE_IMAGE+="ramdisk.img")
-	$(if $(shell $(MKSQUASHFS) -version | grep "version [0-3].[0-9]"),\
-		$(error Your mksquashfs is too old to work with kernel 2.6.29. Please upgrade to squashfs-tools 4.0))
-	$(hide) $(MKSQUASHFS) $(1) $(2) -noappend
-endef
 UPDATE_IMG:= $(addprefix $(PRODUCT_OUT)/, $(shell cat $(UPDATE_LIST)))
 UPDATE_ZIP := $(PRODUCT_OUT)/$(UPDATE)_$(VERSION).zip
 $(UPDATE_ZIP): $(VERSION_FILE) $(UPDATE_LIST)
-	zip -qj $(UPDATE_ZIP) $(BUILT_IMG) $(VERSION_FILE) $(UPDATE_LIST)
+	zip -qj $(UPDATE_ZIP) $(UPDATE_IMG) $(VERSION_FILE) $(UPDATE_LIST)
 
 .PHONY: iso_img usb_img efi_img oto_img update_zip
 iso_img: $(ISO_IMAGE)
