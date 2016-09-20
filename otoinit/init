@@ -10,7 +10,8 @@
 
 #  CMDLINE=/tmp/cmdline
   CMDLINE=/proc/cmdline
-  
+set -x
+exec 2>>/tmp/log  
 #  echo "BOOT_MODE=hdimgboot" >$CMDLINE
 #  echo "RAMDISK_HD_UUID=fe2be1f5-50e0-4bdd-bf33-53dd0ffba119" >>$CMDLINE
 #  echo "RAMDISK_IMG=OpenThos/ramdisk.img" >>$CMDLINE
@@ -91,12 +92,14 @@ fi
   # Func: dirs  
   dirs()
   {
+    printf "_DIRSTACK: $PWD  "
+    
     local OLDIFS="$IFS"
     IFS=":"
   
     for i in $_DIRSTACK
     do
-      printf "$i \t"
+      printf "$i  "
     done
     
     printf "\n"
@@ -120,9 +123,10 @@ fi
       return 1
     fi
     
-    local varPWD=`pwd`
+    local varDIR=`pwd`
+    
     if cd "$REQ"; then
-      _DIRSTACK="$varPWD:_DIRSTACK"
+      _DIRSTACK="$varDIR:$_DIRSTACK"
       dirs
       return 0
     else
@@ -139,7 +143,7 @@ fi
   # Param:
   popd()
   {
-    _DIRSTACK=$_DIRSTACK
+#    _DIRSTACK=$_DIRSTACK
     
     if [ -z "$_DIRSTACK" ]; then
         echo "POPD: Directory stack is empty."
@@ -147,17 +151,18 @@ fi
     fi
     
     if cd `echo $_DIRSTACK | cut -d: -f1`; then
-      dirs
 #      _DIRSTACK=`echo $_DIRSTACK | cut -d: -f1 --complement`
-      semiPos=`expr index $_DIRSTACK ":"`
+      local semiPos=`expr index $_DIRSTACK ":"`
       let semiPos=$semiPos+1
       _DIRSTACK=`echo $_DIRSTACK | cut -b$semiPos-`
+      dirs
       return 0
     else
       echo "POPD: change directory failed !"
       return 1
     fi
   }
+
 
   #----------------------------------
   # by: David Chan (chanuei@sina.com)
@@ -379,8 +384,6 @@ echo "mount -o loop $varImg $sfsMountPoint"
   get_param_from_bootargs BOOT_MODE
   echo "              BOOT_MODE is $BOOT_MODE"
   
-  source /scripts/oto_update
-  openthos_update
   case $BOOT_MODE in
   install)
     echo "base init: will boot OpenThos in install mode"
@@ -429,6 +432,7 @@ echo "mount -o loop $varImg $sfsMountPoint"
     ;;
     
   hdimgboot)
+    source /scripts/oto_update.sh
     openthos_update
     echo "base init: will boot OpenThos from local disk images."
 
@@ -443,6 +447,8 @@ echo "mount -o loop $varImg $sfsMountPoint"
     ;;
     
   hdboot)
+    source /scripts/oto_update.sh
+    openthos_update
     pushd $ANDROID_DIR
 
     echo "base init: will boot OpenThos from local disk partitions."

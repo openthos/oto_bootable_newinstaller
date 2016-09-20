@@ -11,6 +11,7 @@
 CMD=""
 tempfile=/tmp/temp-$$
 menufile=/tmp/menu-$$
+log=/tmp/install-log
 MOUNT="/mnt/data"
 CPIO=cpio
 try_mount()
@@ -26,10 +27,14 @@ try_mount()
 
 rebooting()
 {
-	dialog --title " Rebooting... " --nocancel --pause "" 8 41 1
+	if [ -n "$1" ];then
+		dialog --title " Rebooting... " --nocancel --pause "$1" 8 41 1
+	else
+		dialog --title " Rebooting... " --nocancel --pause "" 8 41 1
+	fi
 	sync
-	umount -a
-	reboot -f
+	#umount -a
+	#reboot -f
 }
 
 choose()
@@ -40,7 +45,15 @@ choose()
 	retval=$?
 	choice=`cat $tempfile`
 }
-
+convert_to_gpt()
+{	
+	mkfs.vfat -I $1
+	gdisk $1 << EOF
+2
+w
+y
+EOF
+}
 partition_drive()
 {
 	echo partition_drive ...
@@ -81,9 +94,18 @@ partition_drive()
 			cfdisk /dev/$choice
 		fi
 		if [ $? -eq 0 ]; then
-			retval=1
+			retval=0
 		else
-			retval=255
+			dialog --title " Confirm " --yesno "\n Looks like fail to use GPT,Do you want to erase all partition to use GPT" 28 29
+				if [ $? -eq 0 ]; then
+					convert_to_gpt /dev/$choice
+					cgdisk /dev/$choice
+					if [ $? -eq 0 ]; then
+						retval=0
+					fi
+				else
+					rebooting "fail to partition"
+				fi
 		fi
 	fi
 	return $retval
@@ -92,7 +114,7 @@ format_fs()
 {
 	local cmd
 	if [ $2 = "data" ];then
-		echo -e '"Do not format" ""\next4 ""\next3 ""\next2 ""\nntfs""' > $menufile
+		echo -e '"Do not format" ""\nntfs ""' > $menufile
 	elif [ $2 = "system" ];then
 		echo -e '"Do not format" ""\next4 ""\next3 ""\next2 ""' > $menufile
 	elif [ $2 = "efi" ];then
@@ -144,21 +166,8 @@ format_fs()
 	fi
 }
 
-select_all_dev()
+select_whole_dev()
 {
-	echo select_all_dev ...
-	
-	blkid | grep -v -E "^/dev/block/|^/dev/loop" | cut -b6- | sort | awk '{
-		t="unknown"
-		for (i = NF; i > 1; --i)
-			if (match($i, "^TYPE")) {
-				t=$i
-				break
-			}
-		gsub(/TYPE=|"/, "", t)
-		printf("%s\t%s\n", $1, t)
-	}' > $tempfile
-
 	lsblk=`ls /sys/block | grep -v -E "loop|ram|sr|boot|rpmb"`
 	for d in $lsblk; do
 		p=0
@@ -176,7 +185,7 @@ select_all_dev()
 	} END {
 		printf("\"Create/Modify partitions\" \"\"\n\"Detect devices\" \"\"")
 	}' > $menufile
-	choose "Choose Partition" "Please select a disk to install OPENTHOS:\nWarning:will earse all partition,please store your data"
+	choose "Choose Partition" "Please select a partition,will earse whole partition to install OPENTHOS:"
 	return $retval
 }
 select_dev()
@@ -211,41 +220,7 @@ select_dev()
 	} END {
 		printf("\"Create/Modify partitions\" \"\"\n\"Detect devices\" \"\"")
 	}' > $menufile
-	choose "Choose Partition" "Please select a partition to install OPENTHOS EFI partition:"
-	return $retval
-}
-select_data_dev()
-{
-	echo select_data_dev ...
-	
-	blkid | grep -v -E "^/dev/block/|^/dev/loop" | cut -b6- | sort | awk '{
-		t="unknown"
-		for (i = NF; i > 1; --i)
-			if (match($i, "^TYPE")) {
-				t=$i
-				break
-			}
-		gsub(/TYPE=|"/, "", t)
-		printf("%s\t%s\n", $1, t)
-	}' > $tempfile
-
-	lsblk=`ls /sys/block | grep -v -E "loop|ram|sr|boot|rpmb"`
-	for d in $lsblk; do
-		p=0
-		for i in /sys/block/$d/$d* /sys/block/$d; do
-			[ -e $i/partition ] && p=1
-			[ $p -eq 1 -a "$i" = "/sys/block/$d" ] && break
-			echo $i | grep -q -E "boot|rpmb" && continue
-			[ -d $i ] && ( grep "`basename $i:`" $tempfile || echo "`basename $i` unknown" )
-		done
-	done | awk '{
-		sub(/:/, "", $1)
-		printf("\"%-13s%-17s", $1, $2)
-		system("cd /sys/block; for f in "$1"/device/model "$1"/device/name */"$1"/../device/model */"$1"/../device/name; do [ -e $f ] && echo -n `cat $f` && break; done")
-		printf("\" \"\"\n")
-	} END {
-	}' > $menufile
-	choose "Choose Partition" "Please select a partition to install OPENTHOS DATA partition"
+	choose "Choose Partition" "Please select a partition to install OPENTHOS "$1" partition:"
 	return $retval
 }
 
@@ -254,52 +229,13 @@ progress_bar()
 	dialog --clear --title " $1 " --gauge "\n $2" 8 70
 }
 
-
-
-create_entry()
-{
-	title=$1
-	shift
-	echo -e "title $title\n\tkernel /$asrc/kernel$vga $@ SRC=/$asrc\n\tinitrd /$asrc/initrd.img\n" >> $menulst
-}
-
-create_newest_entry()
-{
-	title=$1
-	shift
-	echo -e "title $title\n\tkernel /$newasrc/kernel$vga $@ SRC=/$newasrc\n\tinitrd /$newasrc/initrd.img\n" >> $menulst
-}
-
-
-create_menulst()
-{
-	menulst=/hd/grub/menu.lst
-	[ -n "$VESA" ] && vga=" vga=788 modeset=0"
-	echo -e "${GRUB_OPTIONS:-default=0\ntimeout=6\nsplashimage=/grub/android-x86.xpm.gz\n}root (hd0,$1)\n" > $menulst
-
-	create_entry "OPENTHOS $VER" $cmdline
-	create_entry "OPENTHOS $VER (Debug mode)" $cmdline console=ttyS0 DEBUG=2
-	create_newest_entry "OPENTHOS Newest" $cmdline
-	create_Newest_entry "OPENTHOS Newest (Debug mode)" $cmdline console=ttyS0 DEBUG=2
-}
-
-create_winitem()
-{
-	win=`fdisk -l /dev/$(echo $1 | cut -b-3) | grep ^/dev | cut -b6-12,55- | awk '{
-		if (match($2, "NTFS"))
-			print $1
-	}' | head -1`
-	if [ -n "$win" ]; then
-		dialog --title " Confirm " --yesno \
-			"\nThe installer found a Windows partition in /dev/$win.\n\nDo you want to create a boot item for Windows?" 9 59
-		[ $? -ne 0 ] && return 1
-		wp=$((`echo $win | cut -b4-`-1))
-		echo -e "title Windows\n\trootnoverify (hd$d,$wp)\n\tchainloader +1\n" >> $menulst
-	fi
-}
-
 create_boto_img()
 {
+	if [ $avaiable -gt 10 ];then
+		default_size=10
+	else
+		default_size=$avaiable
+	fi
 	bname=`basename $2`
 	if [ -e $2 ]; then
 		dialog --title " Confirm "  --yesno \
@@ -308,21 +244,35 @@ create_boto_img()
 		rm -f $2
 	fi
 	dialog --title " Question " --nook --nocancel --inputbox \
-		"\nPlease input the size of the $bname in GB (max 100):" 8 63 $1 2> $tempfile
+		"\nPlease input the size of the $bname in GB (max "$avaiable"):" 8 63 $default_size 2> $tempfile
 	size=`cat $tempfile`
-	[ 0$size -le 0 -o 0$size -gt 100 ] && size=100
+	[ 0$size -le 0 -o 0$size -gt "$avaiable" ] && size=$avaiable
 	size=`expr $size \* 1024`
 	dd if=/dev/zero of=$2 bs=1 count=0 seek=$size"M"
-	#( dd bs=1M count=$size if=/dev/zero | pv -ns ${size}m | dd of=$2 ) 2>&1 \
-	#	| progress_bar "Creating $bname" "Expect to write $size MB..."
 }
 
+avaiable_space()
+{
+	avaiable=`df -h|grep $MOUNT|awk '{print $4;}'|awk -F "G" '{print $1}'|awk -F "." '{print $1}'`
+	if [ "$avaiable" -gt 10 ];then
+		return $avaiable
+	else
+		dialog --title " Confirm " --yesno \
+			"\nThe hard drive least space is less than 10G,do you still install it?" 11 62
+		if [ $? = 0 ];then
+			return $avaiable
+		else
+			rebooting
+		fi
+	fi
+}
 create_boto_data_img()
 {
+	avaiable_space
 	dialog --title " Confirm " --yesno \
-		"\nThe installer is going to create a disk image to save the user data.\ndefault space is 20G.\n\nAre you sure to create the image?" 11 62
+		"\nThe installer is going to create a disk image to save the user data.\ndefault space is "$avaiable"M.\n\nAre you sure to create the image?" 11 62
 	if [ $? -eq 0 ]; then
-		create_boto_img 20 $MOUNT/openthos/data.img
+		create_boto_img $avaiable $MOUNT/openthos/data.img
 		losetup /dev/loop6 $MOUNT/openthos/data.img
 		make_ext4fs -L /data /dev/loop6 > /dev/tty6
 		[ $? -ne 0 ] && dialog --msgbox "\n Failed to create data.img." 7 33
@@ -365,36 +315,22 @@ boto_install_to()
 
 	asrc="OpenThos"
 
-	dialog --title " Confirm " --no-label Skip  --yesno \
-		"\n Do you want to install OpenThos" 7 39
-	if [ $? -eq 0 ]; then
-		get_part_info $1
-		for i in /sys/block/$disk/$disk*; do         ##should use UUID
-			[ 0`cat $i/partition` -eq 1 ] && break
-		done
-		boot=`basename $i`
-		mountpoint -q /hd && umount /hd
-		dialog --title " Confirm "  --yesno \
-			"\n Do you want to format the boot partition\n /dev/$boot?" 8 45
-		[ $? -eq 0 ] && mkfs.vfat -n EFI /dev/$boot
-		try_mount rw /dev/$boot /hd
-		cp -af /refind/efi /hd                        ##change grub2 -> boto
-		mountpoint -q /hd && umount /hd
-		try_mount rw /dev/$1 /hd
-	fi
+	get_part_info $1
+	for i in /sys/block/$disk/$disk*; do         ##should use UUID
+		[ 0`cat $i/partition` -eq 1 ] && break
+	done
+	boot=`basename $i`
+	mountpoint -q /hd && umount /hd
+	mkfs.vfat -n EFI /dev/$boot
+	try_mount rw /dev/$boot /hd
 
-	dialog --title " Confirm " --yesno \
-		"\nDo you want to install /system directory as read only?" 10 61
-	instal_rw=$?
 	SRC="livemedia/OpenThos"
 	files="kernel initrd.img ramdisk.img system.*"
 	size=0
-	for s in `du -sk $files | awk '{print $1}'`; do
+	for s in `cd /mnt/$SRC/;du -sk $files | awk '{print $1}'`; do
 		size=$(($size+$s))
 	done
 	
-	#try_upgrade hd/$asrc
-
 	mkdir -p hd/$asrc
 	cd hd/$asrc
 	rm -rf system*
@@ -418,7 +354,6 @@ boto_install_to()
 	sleep 1
 	sync
 	return 0
-	#return $result
 }
 boto_data_install_to()
 {
@@ -426,13 +361,14 @@ boto_data_install_to()
 	mkdir $MOUNT
 	while [ 1 ]; do
 		format_fs $1 data
-		if [ `blkid /dev/$1|awk -F "\"" '{print $6;}'` = "ntfs" ]; then
+		if [ `blkid /dev/$1|awk -F "TYPE" '{print $2;}'|awk -F "\"" '{print $2;}'` = "ntfs" ]; then
 			mount.ntfs-3g /dev/$1 $MOUNT && break
 		else
 			try_mount rw /dev/$1 $MOUNT && break
 		fi
 		dialog --clear --title " Error "  --yesno \
 			"\n Cannot mount /dev/$1\n Do you want to format it?" 8 37
+		[ $? -ne 0 ] && return 255
 	done
 	mkdir $MOUNT/openthos
 	create_boto_data_img
@@ -446,12 +382,11 @@ boto_data_install_to()
 	dialog --infobox "\n Syncing data to disk..." 5 30
 	sleep 1
 	sync
+	return 0
 }
-boto_install_hd()
+boto_hdimg_system()
 {
-	echo boto_install_hd...
-
-	select_dev || rebooting
+	select_dev "SYSTEM"|| rebooting
 	retval=1
 	case "$choice" in
 		[shvm][dm]*)
@@ -469,10 +404,9 @@ boto_install_hd()
 	return $retval
 }
 
-boto_install_data_hd()
+boto_hdimg_data()
 {
-
-	select_data_dev || rebooting
+	select_dev "DATA"|| rebooting
 	retval=1
 	case "$choice" in
 		[shvm][dm]*)
@@ -485,28 +419,115 @@ boto_install_data_hd()
 
 manual_install()
 {
-	until boto_install_hd; do
+	until boto_hdimg_system; do
 		if [ $retval -eq 255 ]; then
 			dialog --title ' Error! ' --yes-label Retry --no-label Reboot \
-				--yesno '\nInstallation failed! Please check if you have enough free disk space to install OPENTHOS.' 8 51
+				--yesno '\nInstallation failed!' 8 51
 			[ $? -eq 1 ] && rebooting
 		fi
 	done
-	until boto_install_data_hd; do
+	until boto_hdimg_data; do
 		if [ $retval -eq 255 ]; then
 			dialog --title ' Error! ' --yes-label Retry --no-label Reboot \
-				--yesno '\nInstallation data failed!' 8 51
+				--yesno '\nInstallation failed!' 8 51
 			[ $? -eq 1 ] && rebooting
 		fi
 	done
-	#begin reboot system
-	sum=5;while [[ sum -gt 0 ]];do echo $sum;sum=`expr $sum - 1`;dialog --title " REBOOTING OPENTHOS" --infobox "\n        $sum" 7 30 ;sleep 1; done
-	rebooting
-	
 }
+create_hdimg_gpt()
+{
+	gdisk $1 << EOF
 
+}
+delete_gpt()
+{
+	DEL=/scripts/del.sh
+	echo "" > $DEL
+	echo "#!/bin/busybox sh" >> $DEL
+	echo "gdisk $1 << EOF" >> $DEL
+	partition=`sudo gdisk -l /dev/sdd|grep -A 10 Number|awk '{if (!match($0,"Number")) print $1;}'|sort -r`
+	echo $partition
+	for c in $partition;do echo "d" >> $DEL;echo $c >> $DEL;done
+	echo $cmd >> $DEL
+	echo "w" >> $DEL
+	echo "y" >> $DEL
+	echo "EOF" >> $DEL
+	chmod +x $DEL
+	./$DEL
+}
+create_hdimg_gpt()
+{
+	gdisk $1 << EOF
+n
+1
+
++2G
+0700
+n
+2
+
++100G
+8300
+n
+3
+
+
+8300
+w
+y
+EOF
+}
+pre_mount()
+{
+	sys_part=$1"1"
+	data_part=$1"2"
+	mkfs.vfat -I sys_part
+	mount sys_part /hd
+	mkfs.ext2 -I data_part
+	mount data_part $MOUNT
+}
+install_system()
+{
+	files="kernel initrd.img ramdisk.img system.*"
+	mkdir -p hd/$asrc
+	cd hd/$asrc
+	( ( cd /mnt/$SRC/; find $files | $CPIO -H newc -o ) | pv -ns ${size}k | ( $CPIO -iu > /dev/null; echo $? > /tmp/result )) 2>&1 \
+		| progress_bar "Installing OPENTHOS" "Expect to write $size KB..."
+	tar -xvf /mnt/$SRC/efi.tar.bz2 -C /hd/ > /dev/null
+	UUID=`blkid $1"1"|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
+	grubcfg=/hd/efi/boot/refind.conf	
+	echo -e "menuentry openthos {" >> $grubcfg
+	echo -e "\ticon EFI/boot/themes/boto/os_openthos.png" >> $grubcfg
+	echo -e "\tvolume $UUID" >> $grubcfg
+	echo -e "\tloader OpenThos/kernel" >> $grubcfg
+	echo -e "\tinitrd OpenThos/initrd.img" >> $grubcfg
+	CMD="options \"quiet androidboot.hardware=android_x86_64 BOOT_MODE=hdimgboot RAMDISK_HD_UUID=$UUID RAMDISK_IMG=OpenThos/ramdisk.img SYSTEM_HD_UUID=$UUID SYSTEM_IMG=OpenThos/system.sfs"
+
+	sync;sync;sync
+	mkdir $MOUNT/openthos
+	dd if=/dev/zero of=$MOUNT/openthos/data.img bs=1 count=0 seek=50G
+	losetup /dev/loop6 $MOUNT/openthos/data.img
+	make_ext4fs -L /data /dev/loop6 > /dev/tty6
+	UUID=`blkid /dev/$1|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
+	CMD="$CMD DATA_HD_UUID=$UUID DATA_IMG=openthos/data.img\""
+	echo $CMD >> $grubcfg
+	echo -e "\n}" >> $grubcfg
+	sync
+}
+earse_all_partition()
+{
+	dialog --title "Earsing all hard drive..."
+	convert_to_gpt /dev/$1
+	delete_gpt /dev/$1
+	create_hdimg_gpt /dev/$1
+	pre_mount /dev/$1
+	install_system /dev/$1
+}
 auto_install()
 {
+	select_whole_dev ALL_SYSTEM || rebooting
+	earse_all_partition $choice
+	create_partition
 }
 user_guide()
 {
@@ -515,11 +536,13 @@ user_guide()
 }
 hdimg_install()
 {
-	echo do_install_boto ...	
+	echo do_install_boto ...
 	user_guide
-	if [ $? -eq 1 ];then	
+	if [ $? -eq 1 ];then
 		manual_install
+		sum=5;while [[ sum -gt 0 ]];do echo $sum;sum=`expr $sum - 1`;dialog --title " REBOOTING OPENTHOS" --infobox "\n        $sum" 7 30 ;sleep 1; done
 	else 
 		auto_install
 	fi
+	rebooting
 }

@@ -3,12 +3,13 @@
 UPDATE_NONEED=0
 UPDATE_SHOULD=1
 UPDATA_MISS=2
+
 UPDATE_SRC=/mnt/data/media/0/System_Os
 UPDATE_INFO=$UPDATE_SRC/update
-         UPDATE_PACK=$UPDATE_SRC
+UPDATE_PACK=$UPDATE_SRC
 UPDATE_DESC=update.list
 
-         TMP_DIR=/tmp/oto_update
+TMP_DIR=/tmp/oto_update
 
 #----------------------------------
 # by: David Chan (chanuei@sina.com)
@@ -68,7 +69,6 @@ update_detect()
 #   $2, imgPath
 replace_img_file()
 {
-  pushd 
   local retVar;
   pushd $2
   local varPackFormat="$(echo $UPDATE_PACK | rev | cut -d. -f1 | rev)"
@@ -111,32 +111,47 @@ do_update()
     get_param_from_bootargs SYSTEM_HD_UUID
 
     if [ -n "$SYSTEM_HD_UUID" ]; then
-      prepare_mountpoint system
-      mount_part_via_uuid $SYSTEM_HD_UUID system
-      replace_img_file $1 system/OpenThos
       case $BOOT_MODE in
       hdimgboot)
-        :
+        prepare_mountpoint system
+        mount_part_via_uuid $SYSTEM_HD_UUID system
+        local systemImagePath
+        get_param_from_bootargs SYSTEM_IMG
+        systemImagePath="$(echo $SYSTEM_IMG | rev | cut -d/ -f2- | rev)"
+        replace_img_file $1 system/$systemImagePath
+        sleep 1s
+        umount system
         ;;
       hdboot)
+        local varFsType
+        get_hd_fstype $SYSTEM_HD_UUID varFsType
+        local hdPart
+        hdPart="$(for c in `blkid | grep -m 1 -i $SYSTEM_HD_UUID`; do	echo $c | grep -i "/dev" | cut -d":" -f1; done)"
+        mkfs -F -t $varFsType -U $SYSTEM_HD_UUID $hdPart
+        prepare_mountpoint system
+        mount_part_via_uuid $SYSTEM_HD_UUID system
         pushd system
-        mkdir -p /mnt/system.sfs
+        
+        unzip -o $UPDATE_PACK $1
+        prepare_mountpoint /mnt/system.sfs
         mount -o loop system.sfs /mnt/system.sfs
-        mkdir -p /mnt/system.img
-        mount -o loop /mnt/system.sfs /mnt/system.img 
-        cp -afv /mnt/system.img/* ./4
+        prepare_mountpoint /mnt/system.img
+        mount -o loop /mnt/system.sfs/system.img /mnt/system.img 
+        local varFsType
+        cp -af /mnt/system.img/* ./
         sync;sync;sync
         
         umount /mnt/system.img
         umount /mnt/system.sfs
-        rm -f system.sfs
+        rm -f $1
         popd
+        umount system
         ;;
+
       *)
         retVar=1
         ;;
       esac
-      umount system
     else
       echo hdimg_replace_file: Fata error, no RAMDISK_HD_UUID found from bootagrs.
       retVar=1
@@ -148,8 +163,16 @@ do_update()
     prepare_mountpoint ramdisk
     if [ -n "$RAMDISK_HD_UUID" ]; then
       mount_part_via_uuid $RAMDISK_HD_UUID ramdisk
-      replace_img_file $1 ramdisk/OpenThos
+      local ramdiskImagePath
+      get_param_from_bootargs RAMDISK_IMG
+      ramdiskImagePath="$(echo $RAMDISK_IMG | rev | cut -d/ -f2- | rev)"
+echo ramdiskImagePath=$ramdiskImagePath while RAMDISK_IMG=$RAMDISK_IMG   
+      replace_img_file $1 ramdisk/$ramdiskImagePath
       sync;sync;sync
+      
+sleep 1s
+      
+echo will umount ramdisk, now at $PWD
       umount ramdisk
     else
       echo hdimg_replace_file: Fata error, no RAMDISK_HD_UUID found from bootagrs.
@@ -162,6 +185,7 @@ do_update()
     retVar=1
     ;;
   esac
+  
   popd
   
   return $retVar
@@ -174,9 +198,11 @@ do_update()
 # Func: update_detect
 openthos_update()
 {
+
+set +x
   echo oto_update: Checking ...
   
-  if [ ! "$BOOT_MODE" = "hdboot" ] & [ ! "$BOOT_MODE" = "hdimgboot" ]; then
+  if [ ! "$BOOT_MODE" = "hdboot" ] && [ ! "$BOOT_MODE" = "hdimgboot" ]; then
   
     echo $BOOT_MODE
     return
@@ -194,8 +220,9 @@ openthos_update()
       
       mount_part_via_uuid $DATA_HD_UUID data.hd
       
-      ls data.img
-      mount -o loop data.hd/OpenThos/data.img data
+      ls data.hd
+      get_param_from_bootargs DATA_IMG
+      mount -o loop data.hd/$DATA_IMG data
       
     else
       
@@ -215,8 +242,8 @@ openthos_update()
       echo openthos_update: It seems that the system should be updated, but no update package found.
       ;;
     $UPDATE_SHOULD)
-    
-      mkdir $TMP_DIR
+      echo Update file found, your os will be updated.
+      mkdir -p $TMP_DIR
       load_update_desc
       if [ $? -ne 0 ]; then
         echo hdimg_update: Failed to update OpenThos
@@ -252,7 +279,7 @@ openthos_update()
     rm -rf $TMP_DIR
     umount data
     
-    mountpoint data.hd
+    mountpoint data.hd >/dev/null 2>&1
     if [ $? -eq 0 ]; then
       umount data.hd
     fi
