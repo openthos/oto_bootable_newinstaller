@@ -90,6 +90,10 @@ $(INSTALL_RAMDISK): $(wildcard $(LOCAL_PATH)/install/*/* $(LOCAL_PATH)/install/*
 	$(if $(TARGET_INSTALL_SCRIPTS),$(ACP) -p $(TARGET_INSTALL_SCRIPTS) $(TARGET_INSTALLER_OUT)/scripts)
 	$(MKBOOTFS) $(dir $(dir $(<D))) | gzip -9 > $@
 
+DATA_IMG := $(PRODUCT_OUT)/data.img
+$(DATA_IMG): $(wildcard $(LOCAL_PATH)/../../packages/apps/ExternalAPP) | $(MKBOOTFS)
+	$(MKBOOTFS) $^ | gzip -9 > $@
+
 boot_dir := $(PRODUCT_OUT)/boot
 $(boot_dir): $(wildcard $(LOCAL_PATH)/boot/isolinux/*) $(systemimg) $(GENERIC_X86_CONFIG_MK) | $(ACP)
 	$(hide) rm -rf $@
@@ -135,7 +139,7 @@ endif
 REFIND=efi.tar.bz2
 OTO_IMAGE := $(PRODUCT_OUT)/$(TARGET_PRODUCT)_oto.img
 ESP_LAYOUT := $(LOCAL_PATH)/editdisklbl/esp_layout.conf
-$(OTO_IMAGE): $(wildcard $(LOCAL_PATH)/boot/efi/*/*) $(BUILT_IMG) $(ESP_LAYOUT) | $(edit_mbr)
+$(OTO_IMAGE): $(wildcard $(LOCAL_PATH)/boot/efi/*/*) $(BUILT_IMG) $(DATA_IMG) $(ESP_LAYOUT) | $(edit_mbr)
 	$(shell if [ ! -d  $(@D)/OpenThos ];then mkdir $(@D)/OpenThos;fi)
 	@tar jcvf $(REFIND) -C $(<D)/../../../install/refind efi
 	@mv $(REFIND) $(PRODUCT_OUT)/OpenThos/

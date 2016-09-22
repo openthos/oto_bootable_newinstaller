@@ -33,8 +33,8 @@ rebooting()
 		dialog --title " Rebooting... " --nocancel --pause "" 8 41 1
 	fi
 	sync
-	#umount -a
-	#reboot -f
+	umount -a
+	reboot -f
 }
 
 choose()
@@ -123,10 +123,10 @@ format_fs()
 	choose "Choose filesystem" "Please select a filesystem to format $1:"
 	case "$choice" in
 		ext4)
-			cmd="make_ext4fs"
+			cmd="mke2fs -t ext4"
 			;;
 		ext3)
-			cmd="mke2fs -j"
+			cmd="mke2fs -t ext3 -j"
 			;;
 		ext2)
 			cmd="mke2fs"
@@ -168,25 +168,34 @@ format_fs()
 
 select_whole_dev()
 {
-	lsblk=`ls /sys/block | grep -v -E "loop|ram|sr|boot|rpmb"`
-	for d in $lsblk; do
-		p=0
-		for i in /sys/block/$d/$d* /sys/block/$d; do
-			[ -e $i/partition ] && p=1
-			[ $p -eq 1 -a "$i" = "/sys/block/$d" ] && break
-			echo $i | grep -q -E "boot|rpmb" && continue
-			[ -d $i ] && ( grep "`basename $i:`" $tempfile || echo "`basename $i` unknown" )
-		done
-	done | awk '{
-		sub(/:/, "", $1)
-		printf("\"%-13s%-17s", $1, $2)
-		system("cd /sys/block; for f in "$1"/device/model "$1"/device/name */"$1"/../device/model */"$1"/../device/name; do [ -e $f ] && echo -n `cat $f` && break; done")
-		printf("\" \"\"\n")
-	} END {
-		printf("\"Create/Modify partitions\" \"\"\n\"Detect devices\" \"\"")
-	}' > $menufile
-	choose "Choose Partition" "Please select a partition,will earse whole partition to install OPENTHOS:"
-	return $retval
+	echo -n > $menufile
+	for i in /sys/block/[shv]d[a-z] /sys/block/mmcblk?; do
+		if [ ! -d $i ]; then  # pathname expansion failed
+			continue
+		fi
+		echo -n `basename $i` >> $menufile
+		if [ -f $i/removable -a `cat $i/removable` -eq 0 ]; then
+			echo -n ' "Harddisk ' >> $menufile
+		else
+			echo -n ' "Removable' >> $menufile
+		fi
+		if [ -f $i/size ]; then
+			echo -n " (" `cat $i/size` "blocks)" >> $menufile
+		fi
+		echo '"' >> $menufile
+	done
+	count=`wc -l $menufile | awk '{ print $1 }'`
+	if [ $count -eq 0 ]; then
+		dialog --title " Error " --msgbox \
+			"\nOK. There is no hard drive to edit partitions." 8 49
+		return 255
+	fi
+	if [ $count -eq 1 ]; then
+		choice=`awk '{ print $1 }' $menufile`
+		retval=0
+	else
+		choose "Choose Drive" "Please select a drive to Install OPENTHOS:"
+	fi
 }
 select_dev()
 {
@@ -516,7 +525,7 @@ install_system()
 }
 earse_all_partition()
 {
-	dialog --title "Earsing all hard drive..."
+	dialog --infobox "\n Create GPT Partition..." 5 27
 	convert_to_gpt /dev/$1
 	delete_gpt /dev/$1
 	create_hdimg_gpt /dev/$1
@@ -525,9 +534,14 @@ earse_all_partition()
 }
 auto_install()
 {
-	select_whole_dev ALL_SYSTEM || rebooting
-	earse_all_partition $choice
-	create_partition
+	dialog --title "Auto Install OPENTHOS" --defaultno --yesno "will EARSE whole hard drive,Continue?" 5 45
+	if [ $? -eq 0 ];then
+		select_whole_dev ALL_SYSTEM || rebooting
+		earse_all_partition $choice
+		create_partition
+	else
+		rebooting
+	fi
 }
 user_guide()
 {

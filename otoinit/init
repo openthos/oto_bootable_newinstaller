@@ -6,12 +6,14 @@
 # update by David Chan<chanuei@sina.com> on 2016-8-25
 # License:GPL V2 
 
-  DEBUG=1
+  DEBUG=0
 
 #  CMDLINE=/tmp/cmdline
   CMDLINE=/proc/cmdline
-set -x
-exec 2>>/tmp/log  
+if [ -n "$DEBUG" ];then
+	set -x
+	exec 2>>/tmp/log
+fi  
 #  echo "BOOT_MODE=hdimgboot" >$CMDLINE
 #  echo "RAMDISK_HD_UUID=fe2be1f5-50e0-4bdd-bf33-53dd0ffba119" >>$CMDLINE
 #  echo "RAMDISK_IMG=OpenThos/ramdisk.img" >>$CMDLINE

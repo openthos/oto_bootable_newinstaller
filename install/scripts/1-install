@@ -101,10 +101,10 @@ format_fs()
 	choose "Choose filesystem" "Please select a filesystem to format $1:"
 	case "$choice" in
 		ext4)
-			cmd="make_ext4fs"
+			cmd="mke2fs -t ext4"
 			;;
 		ext3)
-			cmd="mke2fs -j"
+			cmd="mke2fs -t ext3 -j"
 			;;
 		ext2)
 			cmd="mke2fs"
