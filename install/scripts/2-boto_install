@@ -279,7 +279,7 @@ create_boto_data_img()
 {
 	avaiable_space
 	dialog --title " Confirm " --yesno \
-		"\nThe installer is going to create a disk image to save the user data.\ndefault space is "$avaiable"M.\n\nAre you sure to create the image?" 11 62
+		"\nThe installer is going to create a disk image to save the user data.\ndefault space is 10G.\n\nAre you sure to create the image?" 11 62
 	if [ $? -eq 0 ]; then
 		create_boto_img $avaiable $MOUNT/openthos/data.img
 		losetup /dev/loop6 $MOUNT/openthos/data.img
@@ -381,6 +381,15 @@ boto_data_install_to()
 	done
 	mkdir $MOUNT/openthos
 	create_boto_data_img
+	
+	#for data.img
+
+	mount -o loop $MOUNT/openthos/data.img /iso
+	mkdir /iso/vendor/app -p
+	cp /mnt/$SRC/data.img /iso/vendor/app/
+	cd /iso/vendor/app/
+	zcat data.img|cpio -id
+	cd /
 
 	UUID=`blkid /dev/$1|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
 	grubcfg=/hd/efi/boot/refind.conf	
@@ -551,12 +560,13 @@ user_guide()
 hdimg_install()
 {
 	echo do_install_boto ...
-	user_guide
-	if [ $? -eq 1 ];then
-		manual_install
-		sum=5;while [[ sum -gt 0 ]];do echo $sum;sum=`expr $sum - 1`;dialog --title " REBOOTING OPENTHOS" --infobox "\n        $sum" 7 30 ;sleep 1; done
-	else 
-		auto_install
-	fi
+	#user_guide
+	#if [ $? -eq 1 ];then
+	#	manual_install
+	#	sum=5;while [[ sum -gt 0 ]];do echo $sum;sum=`expr $sum - 1`;dialog --title " REBOOTING OPENTHOS" --infobox "\n        $sum" 7 30 ;sleep 1; done
+	#else 
+	#	auto_install
+	#fi
+	manual_install
 	rebooting
 }

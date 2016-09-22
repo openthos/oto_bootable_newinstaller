@@ -423,7 +423,10 @@ boto_data_install_to()
 		dialog --clear --title " Error "  --yesno \
 			"\n Cannot mount /dev/$1\n Do you want to format it?" 8 37
 	done
-	mkdir $MOUNT/openthos
+	mkdir $MOUNT/vendor/app -p
+	cp /mnt/$SRC/data.img $MOUNT/vendor/app/
+	cd $MOUNT/vendor/app/
+	zcat data.img|cpio -id
 	#create_boto_data_img
 
 	UUID=`blkid /dev/$1|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
