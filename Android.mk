@@ -25,6 +25,13 @@ include $(BUILD_HOST_EXECUTABLE)
 
 VER ?= $(shell date +"%F")
 
+$(shell echo "OpenThos Release Note" >$(PRODUCT_OUT)/system/ReleaseNote.txt)
+$(shell echo "" >>$(PRODUCT_OUT)/system/ReleaseNote.txt)
+$(shell echo "OpenThos is modern desktop OS based on android" >>$(PRODUCT_OUT)/system/ReleaseNote.txt)
+$(shell echo "Rleased by: Tsinghua University" >>$(PRODUCT_OUT)/system/ReleaseNote.txt)
+$(shell echo "Build Date:`date`" >>$(PRODUCT_OUT)/system/ReleaseNote.txt)
+
+
 #$(shell cp $(LOCAL_PATH)/replace/libgralloc_drm.so $(PRODUCT_OUT)/system/lib/)
 #$(shell cp $(LOCAL_PATH)/replace/libgralloc_drm.so.64 $(PRODUCT_OUT)/system/lib64/)
 #$(shell cp $(LOCAL_PATH)/replace/houdini5_* $(PRODUCT_OUT)/system/)
@@ -167,6 +174,7 @@ UPDATE_IMG:= $(addprefix $(PRODUCT_OUT)/, $(shell cat $(UPDATE_LIST)))
 UPDATE_ZIP := $(PRODUCT_OUT)/$(UPDATE)_$(VERSION).zip
 $(UPDATE_ZIP): $(VERSION_FILE) $(UPDATE_LIST)
 	zip -qj $(UPDATE_ZIP) $(UPDATE_IMG) $(VERSION_FILE) $(UPDATE_LIST)
+	echo LOCAL_PATH=$(LOCAL_PATH)
 
 .PHONY: iso_img usb_img efi_img oto_img update_zip
 iso_img: $(ISO_IMAGE)

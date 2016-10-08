@@ -56,6 +56,8 @@ if [ ! "$HAS_CTTY" = "YES" ]; then
 
   busybox mount -t tmpfs tmpfs /tmp
   busybox --install -s
+  rm -f /sbin/mke2fs
+  rm -f /sbin/mkfs*
   echo "Early Init: Busybox installed."
 
   mknod /dev/tty c 5 0
@@ -501,8 +503,8 @@ echo "mount -o loop $varImg $sfsMountPoint"
 
 # ensure keyboard driver is loaded
   busybox modprobe atkbd
-  
-#sh 2>&1
+
+get_param_from_bootargs DEBUG
 
 if [ 0$DEBUG -gt 0 ]; then
 	echo -e "\nType 'exit' to continue booting...\n"

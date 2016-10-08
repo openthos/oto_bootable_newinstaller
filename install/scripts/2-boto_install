@@ -123,16 +123,16 @@ format_fs()
 	choose "Choose filesystem" "Please select a filesystem to format $1:"
 	case "$choice" in
 		ext4)
-			cmd="mke2fs -t ext4"
+			cmd="mke2fs -F -t ext4"
 			;;
 		ext3)
-			cmd="mke2fs -t ext3 -j"
+			cmd="mke2fs -F -t ext3 -j"
 			;;
 		ext2)
-			cmd="mke2fs"
+			cmd="mke2fs -F"
 			;;
 		ntfs)
-			cmd="mkntfs -f"
+			cmd="mkntfs -F -f"
 			;;
 		fat32)
 			cmd="mkdosfs"
@@ -334,7 +334,7 @@ boto_install_to()
 	try_mount rw /dev/$boot /hd
 
 	SRC="livemedia/OpenThos"
-	files="kernel initrd.img ramdisk.img system.*"
+	files="kernel install.img initrd.img ramdisk.img system.*"
 	size=0
 	for s in `cd /mnt/$SRC/;du -sk $files | awk '{print $1}'`; do
 		size=$(($size+$s))

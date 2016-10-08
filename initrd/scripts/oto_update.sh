@@ -126,7 +126,7 @@ do_update()
         local varFsType
         get_hd_fstype $SYSTEM_HD_UUID varFsType
         local hdPart
-        hdPart="$(for c in `blkid | grep -m 1 -i $SYSTEM_HD_UUID`; do	echo $c | grep -i "/dev" | cut -d":" -f1; done)"
+        hdPart="$(for c in `blkid | grep -m 1 -i $SYSTEM_HD_UUID`; do echo $c | grep -i "/dev" | cut -d":" -f1; done)"
         mkfs -F -t $varFsType -U $SYSTEM_HD_UUID $hdPart
         prepare_mountpoint system
         mount_part_via_uuid $SYSTEM_HD_UUID system
@@ -136,7 +136,7 @@ do_update()
         prepare_mountpoint /mnt/system.sfs
         mount -o loop system.sfs /mnt/system.sfs
         prepare_mountpoint /mnt/system.img
-        mount -o loop /mnt/system.sfs/system.img /mnt/system.img 
+        mount -t ext4 -o loop /mnt/system.sfs/system.img /mnt/system.img 
         local varFsType
         cp -af /mnt/system.img/* ./
         sync;sync;sync
@@ -162,17 +162,22 @@ do_update()
     get_param_from_bootargs RAMDISK_HD_UUID
     prepare_mountpoint ramdisk
     if [ -n "$RAMDISK_HD_UUID" ]; then
-      mount_part_via_uuid $RAMDISK_HD_UUID ramdisk
+      mount_part_via_uuid $RAMDISK_HD_UUID ramdisk "async"
       local ramdiskImagePath
       get_param_from_bootargs RAMDISK_IMG
       ramdiskImagePath="$(echo $RAMDISK_IMG | rev | cut -d/ -f2- | rev)"
-echo ramdiskImagePath=$ramdiskImagePath while RAMDISK_IMG=$RAMDISK_IMG   
+      echo ramdiskImagePath=$ramdiskImagePath while RAMDISK_IMG=$RAMDISK_IMG   
       replace_img_file $1 ramdisk/$ramdiskImagePath
       sync;sync;sync
       
-sleep 1s
+#      if [ "$1" = "ramdisk.img" ]; then
+#      :
+#        sleep 2s
+#      fi
       
-echo will umount ramdisk, now at $PWD
+#      sleep 1s
+      
+      echo will umount ramdisk, now at $PWD
       umount ramdisk
     else
       echo hdimg_replace_file: Fata error, no RAMDISK_HD_UUID found from bootagrs.
@@ -193,13 +198,45 @@ echo will umount ramdisk, now at $PWD
 
 #----------------------------------
 # by: David Chan (chanuei@sina.com)
+# date: 2016-09-20
+#
+# Func: openthos_update_stage2
+openthos_update_stage2()
+{
+  echo Update file found, your os will be updated.
+  mkdir -p $TMP_DIR
+  load_update_desc
+  if [ $? -ne 0 ]; then
+    echo hdimg_update: Failed to update OpenThos
+    return 1
+  fi
+  
+  local line
+  cat $TMP_DIR/$UPDATE_DESC | while read line; do
+    do_update $line
+    if [ $? -ne 0 ]; then
+      updateRet=-2
+    fi
+  done
+  
+    
+  sed -i '$d' $UPDATE_INFO
+  echo $updateRet >> $UPDATE_INFO
+  
+  if [ $updateRet -eq 0 ]; then
+    echo openthos_update: Updating process succeeded.
+  else
+    echo openthos_update: Updating process failed.
+  fi
+}
+
+#----------------------------------
+# by: David Chan (chanuei@sina.com)
 # date: 2016-09-13
 #
 # Func: update_detect
 openthos_update()
 {
-
-set +x
   echo oto_update: Checking ...
   
   if [ ! "$BOOT_MODE" = "hdboot" ] && [ ! "$BOOT_MODE" = "hdimgboot" ]; then
@@ -208,7 +245,7 @@ set +x
     return
   fi
   
-  local updateRet=0
+  updateRet=0
   get_param_from_bootargs DATA_HD_UUID
 
   if [ -n "$DATA_HD_UUID" ]; then
@@ -219,8 +256,9 @@ set +x
       prepare_mountpoint data.hd
       
       mount_part_via_uuid $DATA_HD_UUID data.hd
-      
-      ls data.hd
+      if [ $DEBUG -gt 0 ]; then
+        ls data.hd
+      fi
       get_param_from_bootargs DATA_IMG
       mount -o loop data.hd/$DATA_IMG data
       
@@ -229,7 +267,6 @@ set +x
       mount_part_via_uuid $DATA_HD_UUID data
     fi
     
-    ls -R /mnt/data
     
     UPDATE_PACK="$UPDATE_PACK/$(tac $UPDATE_INFO | sed -n 2p)"
     
@@ -242,39 +279,36 @@ set +x
       echo openthos_update: It seems that the system should be updated, but no update package found.
       ;;
     $UPDATE_SHOULD)
-      echo Update file found, your os will be updated.
-      mkdir -p $TMP_DIR
-      load_update_desc
-      if [ $? -ne 0 ]; then
-        echo hdimg_update: Failed to update OpenThos
-        return 1
-      fi
-      
-      local line
-      cat $TMP_DIR/$UPDATE_DESC | while read line; do
-        do_update $line
-        if [ $? -ne 0 ]; then
-          updateRet=-2
-        fi
-      done
-      
-        
-      sed -i '$d' $UPDATE_INFO
-      echo $updateRet >> $UPDATE_INFO
-      
-      if [ $updateRet -eq 0 ]; then
-        echo openthos_update: Updating process succeeded.
+
+      get_param_from_bootargs RAMDISK_HD_UUID
+      prepare_mountpoint ramdisk
+
+      mount_part_via_uuid $RAMDISK_HD_UUID ramdisk
+
+      echo now is at `pwd`
+      pushd /
+      zcat /mnt/ramdisk/OpenThos/install.img | cpio -id
+      popd
+      which dialog
+      if [ $? -eq 0 ]; then
+        dialog --backtitle "OpenThos" --title "OTA Update hooker" --infobox "Will upgrade your system now!" 32 80
+        sleep 2s
+        openthos_update_stage2
+#        openthos_update_stage2 | dialog --nook --backtitle "OpenThos" --title "Now Upgrading ..." --programbox 32 80
+        dialog --backtitle "OpenThos" --title "OTA Update hooker" --infobox "\n\n  Upgrade process finished! \n  Now, just enjoy your new OpenThos system!" 32 80
+        sleep 2s
       else
-        echo openthos_update: Updating process failed.
+        openthos_update_stage2
+      fi
+      if [ -d /android/data/dalvik-cache ]; then
+        rm -rf /android/data/dalvik-cache/*
       fi
       ;;
     *)
       echo openthos_update: No update to be done.
       ;;
     esac
-
-
-    pwd
+ 
 
     rm -rf $TMP_DIR
     umount data
@@ -286,4 +320,3 @@ set +x
     popd
   fi
 }
-
