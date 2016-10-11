@@ -98,7 +98,7 @@ $(INSTALL_RAMDISK): $(wildcard $(LOCAL_PATH)/install/*/* $(LOCAL_PATH)/install/*
 	$(MKBOOTFS) $(dir $(dir $(<D))) | gzip -9 > $@
 
 DATA_IMG := $(PRODUCT_OUT)/data.img
-$(DATA_IMG): $(wildcard $(LOCAL_PATH)/../../packages/apps/ExternalAPP) | $(MKBOOTFS)
+$(DATA_IMG): $(wildcard $(LOCAL_PATH)/../../packages/apps/ExternalApp) | $(MKBOOTFS)
 	$(MKBOOTFS) $^ | gzip -9 > $@
 
 boot_dir := $(PRODUCT_OUT)/boot
