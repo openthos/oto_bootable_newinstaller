@@ -623,7 +623,7 @@ install_system()
 }
 earse_all_partition()
 {
-	dialog --infobox "\n Create GPT Partition..." 5 27
+	dialog --infobox "\n Create GPT Partition..." 5 30
 	convert_to_gpt /dev/$1
 	delete_gpt /dev/$1
 	create_hd_gpt /dev/$1
