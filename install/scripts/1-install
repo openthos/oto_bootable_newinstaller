@@ -632,7 +632,7 @@ earse_all_partition()
 }
 auto_install()
 {
-	dialog --title "Auto Install OPENTHOS" --defaultno --yesno "will EARSE whole hard drive,Continue?" 5 45
+	dialog --title "Auto Install OPENTHOS" --defaultno --yesno "will ERASE whole hard drive,Continue?" 5 45
 	if [ $? -eq 0 ];then
 		select_whole_dev || rebooting
 		earse_all_partition $choice
@@ -643,7 +643,7 @@ auto_install()
 manual_install_guide(){
 dialog --title "Manual Install Guide" --yes-label "Understand" --no-label "Cancel" --yesno "\
 ------------------------------------------------------------------------------------\n\
-                         |Choose sda1 to install System|\n\
+                       |Choose sda1 to install boot&kernel|\n\
                          -------------------------------\n\
                                        |\n 
                          -------------------------------\n\
@@ -651,7 +651,7 @@ dialog --title "Manual Install Guide" --yes-label "Understand" --no-label "Cance
                          -------------------------------\n\
                                        |\n 
                          -------------------------------\n\
-                         |         Install System      |\n\
+                         |    Install boot&kernel      |\n\
                          -------------------------------\n\
                                        |\n 
                          -------------------------------\n\
@@ -659,11 +659,23 @@ dialog --title "Manual Install Guide" --yes-label "Understand" --no-label "Cance
                          -------------------------------\n\
                                        |\n 
                          -------------------------------\n\
-                         |    Format sda2 with NTFS    |\n\
+                         |    Format sda2 with ext4    |\n\
                          -------------------------------\n\
                                        |\n 
                          -------------------------------\n\
-                         |    Install private data     |\n\
+                         |       Install System        |\n\
+                         -------------------------------\n\
+                                       |\n 
+                         -------------------------------\n\
+                         |Choose sda3 to install System|\n\
+                         -------------------------------\n\
+                                       |\n 
+                         -------------------------------\n\
+                         |    Format sda3 with ext4    |\n\
+                         -------------------------------\n\
+                                       |\n 
+                         -------------------------------\n\
+                         |Install private data and app |\n\
                          -------------------------------\n\
 " 30 90
 	if [ $? -eq 1 ];then
@@ -679,14 +691,14 @@ user_guide()
 |                          Install Method                        |\n\
 ------------------------------------------------------------------\n\
 Auto Install:\n\
-    wilal EARSE a whole hard disk to install OPENTHOS,you need to backup your private data\n\
+    will ERASE a whole hard disk to install OPENTHOS,you need to backup your private data\n\
     ========================================================\n\
     |\/\/\/\/\/\/\/\/\/\ hard disk is erased \/\/\/\/\/\/\/|\n\
     ========================================================\n\
 \n\
 \n\
 Manual Install:\n\
-  will need 2 partition,1st:System file,2st:private app and data\n\
+  will need 3 partition,1st:boot&kernel file,2st:Syste, 3rd:private app and data\n\
       ====================================================\n\
       |  sda1:8G  | sda2:2G |    sda3:20G             |...|\n\
       ====================================================\n\

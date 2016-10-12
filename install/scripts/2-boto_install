@@ -543,7 +543,7 @@ earse_all_partition()
 }
 auto_install()
 {
-	dialog --title "Auto Install OPENTHOS" --defaultno --yesno "will EARSE whole hard drive,Continue?" 5 45
+	dialog --title "Auto Install OPENTHOS" --defaultno --yesno "will ERASE whole hard drive,Continue?" 5 45
 	if [ $? -eq 0 ];then
 		select_whole_dev || rebooting
 		earse_all_partition $choice
@@ -590,7 +590,7 @@ user_guide()
 |                          Install Method                        |\n\
 ------------------------------------------------------------------\n\
 Auto Install:\n\
-    wilal EARSE a whole hard disk to install OPENTHOS,you need to backup your private data\n\
+    will ERASE a whole hard disk to install OPENTHOS,you need to backup your private data\n\
     ========================================================\n\
     |\/\/\/\/\/\/\/\/\/\ hard disk is erased \/\/\/\/\/\/\/|\n\
     ========================================================\n\
