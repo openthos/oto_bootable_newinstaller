@@ -157,7 +157,7 @@ $(OTO_IMAGE): $(wildcard $(LOCAL_PATH)/boot/efi/*/*) $(BUILT_IMG) $(DATA_IMG) $(
 	for s in `du -sk $^ | awk '{print $$1}'`; do \
 		size=$$(($$size+$$s)); \
         done; \
-	s=`du -sk $(@D)/OpenThos/$(REFIND)|awk '{print $$1}'`;size=$$(($$size+$$s)); \
+	s=`du -sk $(@D)/OpenThos/$(REFIND)|awk '{print $$1}'`;size=$$(($$size+$$s + 8096)); \
 	size=$$(($$(($$(($$(($$(($$size + $$(($$size / 100)))) - 1)) / 32)) + 1)) * 32)); \
 	rm -f $@.fat; mkdosfs -n OTO_INSTDSK -C $@.fat $$size
 	mcopy -Qsi $@.fat $(<D)/../../../install/grub2/efi $(PRODUCT_OUT)/OpenThos ::

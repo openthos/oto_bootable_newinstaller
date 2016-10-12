@@ -14,6 +14,9 @@ menufile=/tmp/menu-$$
 log=/tmp/install-log
 MOUNT="/mnt/data"
 CPIO=cpio
+SRC="livemedia/OpenThos"
+files="kernel install.img initrd.img ramdisk.img system.*"
+asrc="OpenThos"
 try_mount()
 {
 	RW=$1; shift
@@ -34,7 +37,7 @@ rebooting()
 	fi
 	sync
 	umount -a
-	#reboot -f
+	reboot -f
 }
 
 choose()
@@ -44,15 +47,6 @@ choose()
 
 	retval=$?
 	choice=`cat $tempfile`
-}
-convert_to_gpt()
-{	
-	mkfs.vfat -I $1
-	gdisk $1 << EOF
-2
-w
-y
-EOF
 }
 partition_drive()
 {
@@ -322,7 +316,6 @@ boto_install_to()
 	fs=`cat /proc/mounts | grep /dev/$1 | awk '{ print $3 }'`
 	cmdline=`sed "s|\(initrd.*img\s*\)||; s|quiet\s*||; s|\(vga=\w\+\?\s*\)||; s|\(DPI=\w\+\?\s*\)||; s|\(INSTALL=\w\+\?\s*\)||; s|\(SRC=\S\+\?\s*\)||; s|\(DEBUG=\w\+\?\s*\)||; s|\(BOOT_IMAGE=\S\+\?\s*\)||" /proc/cmdline`
 
-	asrc="OpenThos"
 
 	get_part_info $1
 	for i in /sys/block/$disk/$disk*; do         ##should use UUID
@@ -333,8 +326,6 @@ boto_install_to()
 	mkfs.vfat -n EFI /dev/$boot
 	try_mount rw /dev/$boot /hd
 
-	SRC="livemedia/OpenThos"
-	files="kernel install.img initrd.img ramdisk.img system.*"
 	size=0
 	for s in `cd /mnt/$SRC/;du -sk $files | awk '{print $1}'`; do
 		size=$(($size+$s))
@@ -437,6 +428,7 @@ boto_hdimg_data()
 
 manual_install()
 {
+	manual_install_guide
 	until boto_hdimg_system; do
 		if [ $retval -eq 255 ]; then
 			dialog --title ' Error! ' --yes-label Retry --no-label Reboot \
@@ -451,6 +443,15 @@ manual_install()
 			[ $? -eq 1 ] && rebooting
 		fi
 	done
+}
+convert_to_gpt()
+{	
+	mkfs.vfat -I $1
+	gdisk $1 << EOF
+2
+w
+y
+EOF
 }
 delete_gpt()
 {
@@ -502,10 +503,12 @@ pre_mount()
 }
 install_system()
 {
-	SRC="livemedia/OpenThos"
-	files="kernel initrd.img ramdisk.img system.*"
-	mkdir -p hd/$asrc
-	cd hd/$asrc
+	mkdir -p /hd/$asrc
+	cd /hd/$asrc
+	rm -f *
+	for s in `cd /mnt/$SRC/;du -sk $files | awk '{print $1}'`; do
+		size=$(($size+$s))
+	done
 	( ( cd /mnt/$SRC/; find $files | $CPIO -H newc -o ) | pv -ns ${size}k | ( $CPIO -iu > /dev/null; echo $? > /tmp/result )) 2>&1 \
 		| progress_bar "Installing OPENTHOS" "Expect to write $size KB..."
 	tar -xvf /mnt/$SRC/efi.tar.bz2 -C /hd/ > /dev/null
@@ -523,7 +526,7 @@ install_system()
 	dd if=/dev/zero of=$MOUNT/openthos/data.img bs=1 count=0 seek=50G
 	losetup /dev/loop6 $MOUNT/openthos/data.img
 	mke2fs -F -t ext4 -L data /dev/loop6 > /dev/tty6
-	UUID=`blkid /dev/$1|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
+	UUID=`blkid "$1"2|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
 	CMD="$CMD DATA_HD_UUID=$UUID DATA_IMG=openthos/data.img\""
 	echo $CMD >> $grubcfg
 	echo -e "\n}" >> $grubcfg
@@ -548,14 +551,63 @@ auto_install()
 		rebooting
 	fi
 }
+manual_install_guide(){
+dialog --title "Manual Install Guide" --yes-label "Understand" --no-label "Cancel" --yesno "\
+------------------------------------------------------------------------------------\n\
+                         |Choose sda1 to install System|\n\
+                         -------------------------------\n\
+                                       |\n 
+                         -------------------------------\n\
+                         |    Format sda1 with FAT32   |\n\
+                         -------------------------------\n\
+                                       |\n 
+                         -------------------------------\n\
+                         |         Install System      |\n\
+                         -------------------------------\n\
+                                       |\n 
+                         -------------------------------\n\
+                         |Choose sda2 to install System|\n\
+                         -------------------------------\n\
+                                       |\n 
+                         -------------------------------\n\
+                         |    Format sda2 with NTFS    |\n\
+                         -------------------------------\n\
+                                       |\n 
+                         -------------------------------\n\
+                         |    Install private data     |\n\
+                         -------------------------------\n\
+" 30 90
+	if [ $? -eq 1 ];then
+		rebooting
+	fi
+}
 user_guide()
 {
-	dialog --title "Install OpenThos Guide" --yes-label Auto\ Install --no-label Manuall\ Install --yesno "Dear User:\nAbout the Install method:\n    If you're a hacker,you can try \"Manually Install\".\n    else maybe you choose the \"Auto Install\".\n\nProvide some default parameter as guideline for manual installtion.\n    1.OPENTHOS EFI partition\n    expect you choose 8G size as default for store system file.we don't change it normally\n\n    2.OPENTHOS DATA partition\n    expect you choose 100G size as default for store your private data" 25 70
-	[ $? -eq 1 ] && return 1
+	#dialog --title "Install OpenThos Guide" --yes-label Auto\ Install --no-label Manuall\ Install --yesno "Dear User:\nAbout the Install method:\n    If you're a hacker,you can try \"Manually Install\".\n    else maybe you choose the \"Auto Install\".\n\nProvide some default parameter as guideline for manual installtion.\n    1.OPENTHOS EFI partition\n    expect you choose 8G size as default for store system file.we don't change it normally\n\n    2.OPENTHOS DATA partition\n    expect you choose 100G size as default for store your private data" 25 70
+	#[ $? -eq 1 ] && return 1
+	dialog --title "Install OpenThos Guide" --yes-label Auto\ Install --no-label Manuall\ Install --yesno "\
+------------------------------------------------------------------\n\
+|                          Install Method                        |\n\
+------------------------------------------------------------------\n\
+Auto Install:\n\
+    wilal EARSE a whole hard disk to install OPENTHOS,you need to backup your private data\n\
+    ========================================================\n\
+    |\/\/\/\/\/\/\/\/\/\ hard disk is erased \/\/\/\/\/\/\/|\n\
+    ========================================================\n\
+\n\
+\n\
+Manual Install:\n\
+  will need 2 partition,1st:System file,2st:private app and data\n\
+      ====================================================\n\
+      |  sda1:8G  |             sda2:20G             |...|\n\
+      ====================================================\n\
+            |                         |                     \n\
+        System File              App and data               \n\
+" 25 70
+	return $?
 }
 hdimg_install()
 {
-	echo do_install_boto ...
 	user_guide
 	if [ $? -eq 1 ];then
 		manual_install
@@ -564,5 +616,5 @@ hdimg_install()
 		auto_install
 	fi
 	#manual_install
-	#rebooting
+	rebooting
 }

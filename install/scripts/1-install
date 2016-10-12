@@ -13,6 +13,9 @@ tempfile=/tmp/temp-$$
 menufile=/tmp/menu-$$
 MOUNT="/mnt/data"
 CPIO=cpio
+asrc="OpenThos"
+SRC="livemedia/OpenThos"
+files="/mnt/$SRC/kernel /mnt/$SRC/initrd.img /mnt/$SRC/ramdisk.img"
 try_mount()
 {
 	RW=$1; shift
@@ -356,8 +359,6 @@ boto_install_to()
 		[ $? -ne 0 ] && return 255
 	done
 
-	asrc="OpenThos"
-	SRC="livemedia/OpenThos"
 
 	#dialog --title " Confirm " --no-label Skip  --yesno \
 	#	"\n Do you want to install OpenThos" 7 39
@@ -486,11 +487,216 @@ boto_install_system_hd()
 	return $retval
 }
 
-hd_install()
+select_whole_dev()
 {
-	echo do_install_boto ...
-    # for newest android boot entry
-	newasrc=androidnewest
+	echo -n > $menufile
+	for i in /sys/block/[shv]d[a-z] /sys/block/mmcblk?; do
+		if [ ! -d $i ]; then  # pathname expansion failed
+			continue
+		fi
+		echo -n `basename $i` >> $menufile
+		if [ -f $i/removable -a `cat $i/removable` -eq 0 ]; then
+			echo -n ' "Harddisk ' >> $menufile
+		else
+			echo -n ' "Removable' >> $menufile
+		fi
+		if [ -f $i/size ]; then
+			echo -n " (" `cat $i/size` "blocks)" >> $menufile
+		fi
+		echo '"' >> $menufile
+	done
+	count=`wc -l $menufile | awk '{ print $1 }'`
+	if [ $count -eq 0 ]; then
+		dialog --title " Error " --msgbox \
+			"\nOK. There is no hard drive to edit partitions." 8 49
+		return 255
+	fi
+	if [ $count -eq 1 ]; then
+		choice=`awk '{ print $1 }' $menufile`
+		retval=0
+	else
+		choose "Choose Drive" "Please select a drive to Install OPENTHOS:"
+	fi
+}
+convert_to_gpt()
+{	
+	mkfs.vfat -I $1
+	gdisk $1 << EOF
+2
+w
+y
+EOF
+}
+delete_gpt()
+{
+	DEL=/scripts/del.sh
+	echo "" > $DEL
+	echo "#!/bin/busybox sh" >> $DEL
+	echo "gdisk $1 << EOF" >> $DEL
+	partition=`gdisk -l "$1"|grep -A 10 Number|awk '{if (!match($0,"Number")) print $1;}'|sort -r`
+	echo $partition
+	for c in $partition;do echo "d" >> $DEL;echo $c >> $DEL;done
+	echo $cmd >> $DEL
+	echo "w" >> $DEL
+	echo "y" >> $DEL
+	echo "EOF" >> $DEL
+	chmod +x $DEL
+	sh $DEL
+}
+create_hd_gpt()
+{
+	gdisk $1 << EOF
+n
+1
+
++8G
+0700
+n
+2
+
++2G
+8300
+n
+3
+
++10G
+8300
+n
+4
+
+
+8300
+w
+y
+EOF
+}
+pre_mount()
+{
+	ker_part=$1"1"
+	sys_part=$1"2"
+	data_part=$1"3"
+	mkfs.vfat -I $ker_part
+	mount -t vfat -o rw $ker_part /hd
+	mke2fs -F -t ext4 $sys_part
+	try_mount rw $sys_part iso
+	mke2fs -F -t ext4 $data_part
+	mkdir $MOUNT
+	try_mount rw $data_part $MOUNT
+}
+install_system()
+{
+	mkdir -p /hd/$asrc
+	cp $files /hd/$asrc/ -rf
+
+	if [ -e /mnt/$SRC/system.sfs ]; then
+		mkdir /sfs/sfs -p
+		mkdir /sfs/system -p
+                mount -o loop /mnt/$SRC/system.sfs /sfs/sfs
+		mount -o loop /sfs/sfs/system.img /sfs/system
+        fi
+	cp -af /sfs/system/* /iso/ &
+	#This progress bar is fake
+	#i=0;while [[ $i -lt 100 ]];do echo $i;i=`expr $i + 1`;sleep 0.1;done | dialog --title "copying System file" --gauge "copying......" 7 30
+
+	SUUID=`blkid "$1"2|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
+	grubcfg=/hd/efi/boot/refind.conf	
+	tar -xvf /mnt/$SRC/efi.tar.bz2 -C /hd/ > /dev/null
+	UUID=`blkid $1"1"|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
+	grubcfg=/hd/efi/boot/refind.conf	
+	echo -e "menuentry openthos {" >> $grubcfg
+	echo -e "\ticon EFI/boot/themes/boto/os_openthos.png" >> $grubcfg
+	echo -e "\tvolume $UUID" >> $grubcfg
+	echo -e "\tloader OpenThos/kernel" >> $grubcfg
+	echo -e "\tinitrd OpenThos/initrd.img" >> $grubcfg
+	CMD="options \"quiet androidboot.hardware=android_x86_64 BOOT_MODE=hdboot RAMDISK_HD_UUID=$UUID RAMDISK_IMG=OpenThos/ramdisk.img SYSTEM_HD_UUID=$SUUID"
+
+	sync;sync;sync
+	mkdir $MOUNT/openthos
+	dd if=/dev/zero of=$MOUNT/openthos/data.img bs=1 count=0 seek=50G
+	losetup /dev/loop6 $MOUNT/openthos/data.img
+	mke2fs -F -t ext4 -L data /dev/loop6 > /dev/tty6
+	UUID=`blkid "$1"3|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
+	CMD="$CMD DATA_HD_UUID=$UUID\""
+	echo $CMD >> $grubcfg
+	echo -e "\n}" >> $grubcfg
+	sync
+}
+earse_all_partition()
+{
+	dialog --infobox "\n Create GPT Partition..." 5 27
+	convert_to_gpt /dev/$1
+	delete_gpt /dev/$1
+	create_hd_gpt /dev/$1
+	pre_mount /dev/$1
+	install_system /dev/$1
+}
+auto_install()
+{
+	dialog --title "Auto Install OPENTHOS" --defaultno --yesno "will EARSE whole hard drive,Continue?" 5 45
+	if [ $? -eq 0 ];then
+		select_whole_dev || rebooting
+		earse_all_partition $choice
+	else
+		rebooting
+	fi
+}
+manual_install_guide(){
+dialog --title "Manual Install Guide" --yes-label "Understand" --no-label "Cancel" --yesno "\
+------------------------------------------------------------------------------------\n\
+                         |Choose sda1 to install System|\n\
+                         -------------------------------\n\
+                                       |\n 
+                         -------------------------------\n\
+                         |    Format sda1 with FAT32   |\n\
+                         -------------------------------\n\
+                                       |\n 
+                         -------------------------------\n\
+                         |         Install System      |\n\
+                         -------------------------------\n\
+                                       |\n 
+                         -------------------------------\n\
+                         |Choose sda2 to install System|\n\
+                         -------------------------------\n\
+                                       |\n 
+                         -------------------------------\n\
+                         |    Format sda2 with NTFS    |\n\
+                         -------------------------------\n\
+                                       |\n 
+                         -------------------------------\n\
+                         |    Install private data     |\n\
+                         -------------------------------\n\
+" 30 90
+	if [ $? -eq 1 ];then
+		rebooting
+	fi
+}
+user_guide()
+{
+	#dialog --title "Install OpenThos Guide" --yes-label Auto\ Install --no-label Manuall\ Install --yesno "Dear User:\nAbout the Install method:\n    If you're a hacker,you can try \"Manually Install\".\n    else maybe you choose the \"Auto Install\".\n\nProvide some default parameter as guideline for manual installtion.\n    1.OPENTHOS EFI partition\n    expect you choose 8G size as default for store system file.we don't change it normally\n\n    2.OPENTHOS DATA partition\n    expect you choose 100G size as default for store your private data" 25 70
+	#[ $? -eq 1 ] && return 1
+	dialog --title "Install OpenThos Guide" --yes-label Auto\ Install --no-label Manuall\ Install --yesno "\
+------------------------------------------------------------------\n\
+|                          Install Method                        |\n\
+------------------------------------------------------------------\n\
+Auto Install:\n\
+    wilal EARSE a whole hard disk to install OPENTHOS,you need to backup your private data\n\
+    ========================================================\n\
+    |\/\/\/\/\/\/\/\/\/\ hard disk is erased \/\/\/\/\/\/\/|\n\
+    ========================================================\n\
+\n\
+\n\
+Manual Install:\n\
+  will need 2 partition,1st:System file,2st:private app and data\n\
+      ====================================================\n\
+      |  sda1:8G  | sda2:2G |    sda3:20G             |...|\n\
+      ====================================================\n\
+            |           |              |                     \n\
+       boot&kernel   System      App and data             \n\
+" 25 70
+	return $?
+}
+hd_manual_install()
+{
 	until boto_install_hd; do
 		if [ $retval -eq 255 ]; then
 			dialog --title ' Error! ' --yes-label Retry --no-label Reboot \
@@ -514,5 +720,17 @@ hd_install()
 	done
 	#begin reboot system
 	sum=5;while [[ sum -gt 0 ]];do echo $sum;sum=`expr $sum - 1`;dialog --title " REBOOTING OPENTHOS" --infobox "\n        $sum" 7 30 ;sleep 1; done
+	rebooting
+}
+hd_install()
+{
+	user_guide
+	if [ $? -eq 1 ];then
+		hd_manual_install
+		sum=5;while [[ sum -gt 0 ]];do echo $sum;sum=`expr $sum - 1`;dialog --title " REBOOTING OPENTHOS" --infobox "\n        $sum" 7 30 ;sleep 1; done
+	else 
+		auto_install
+	fi
+	#manual_install
 	rebooting
 }
