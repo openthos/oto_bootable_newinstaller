@@ -514,7 +514,7 @@ fi
 # load scripts
 
 echo Load Scripts.....
-for s in `ls /scripts/* /src/scripts/*`; do
+for s in `ls /scripts/*`; do
 	test -e "$s" && source $s
 done
 
