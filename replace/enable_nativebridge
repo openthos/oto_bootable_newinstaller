@@ -25,7 +25,6 @@ while [ ! -s $dest_dir/libhoudini.so ]; do
 	else
 		bzcat houdini5_z.tgz | tar xvf - -C $dest_dir
 	fi
-	sleep 30
 done
 
 
