@@ -193,7 +193,6 @@ done
 # return 1 if it wants to use auto_detect
 [ "$AUTO" != "1" ] && detect_hardware && FOUND=1
 
-[ -n "$INSTALL" -a -n "$BOTO" ] && do_install_boto
 [ -n "$INSTALL" ] && do_install
 
 # OPENTHOS upgrade

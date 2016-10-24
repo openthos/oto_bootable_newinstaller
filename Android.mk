@@ -82,6 +82,18 @@ $(INITRD_RAMDISK): $(initrd_bin) $(systemimg) $(TARGET_INITRD_SCRIPTS) | $(ACP) 
 	$(shell if [ -n $OTO_IMAGE ];then echo "cp $(initrd_dir)/../otoinit/init $(TARGET_INSTALLER_OUT)/init";fi)
 	$(MKBOOTFS) $(TARGET_INSTALLER_OUT) | gzip -9 > $@
 
+OTO_INITRD_RAMDISK := $(PRODUCT_OUT)/oto_initrd.img
+$(OTO_INITRD_RAMDISK): $(initrd_bin) $(systemimg) $(TARGET_INITRD_SCRIPTS) | $(ACP) $(MKBOOTFS)
+	rm -rf $(TARGET_INSTALLER_OUT)
+	$(ACP) -pr $(initrd_dir) $(TARGET_INSTALLER_OUT)
+	$(if $(TARGET_INITRD_SCRIPTS),$(ACP) -p $(TARGET_INITRD_SCRIPTS) $(TARGET_INSTALLER_OUT)/scripts)
+	ln -s /bin/ld-linux.so.2 $(TARGET_INSTALLER_OUT)/lib
+	mkdir -p $(addprefix $(TARGET_INSTALLER_OUT)/,android iso mnt proc sys tmp sfs hd)
+	echo "VER=$(VER)" > $(TARGET_INSTALLER_OUT)/scripts/00-ver
+	$(if $(TARGET_INITRD_SCRIPTS),$(ACP) -p $(initrd_dir)/../otoinit/init $(TARGET_INSTALLER_OUT)/)
+	$(if $(TARGET_INITRD_SCRIPTS),$(ACP) -p $(initrd_dir)/../otoinit/install_scripts/* $(TARGET_INSTALLER_OUT)/install/scripts/)
+	$(MKBOOTFS) $(TARGET_INSTALLER_OUT) | gzip -9 > $@
+
 INSTALL_RAMDISK := $(PRODUCT_OUT)/install.img
 $(INSTALL_RAMDISK): $(wildcard $(LOCAL_PATH)/install/*/* $(LOCAL_PATH)/install/*/*/*/*) | $(MKBOOTFS)
 	$(if $(TARGET_INSTALL_SCRIPTS),$(ACP) -p $(TARGET_INSTALL_SCRIPTS) $(TARGET_INSTALLER_OUT)/scripts)
@@ -129,10 +141,8 @@ $(EFI_IMAGE): $(wildcard $(LOCAL_PATH)/boot/efi/*/*) $(BUILT_IMG) $(ESP_LAYOUT) 
 	$(hide) rm -f $@.fat
 
 # Note: copy from EFI_IMAGE
-ifneq ($(OTO_IMAGE),0)
-	BUILT_IMG := $(addprefix $(PRODUCT_OUT)/OpenThos/,ramdisk.img initrd.img install.img system.sfs)
-	BUILT_IMG += $(if $(TARGET_PREBUILT_KERNEL),$(TARGET_PREBUILT_KERNEL),$(PRODUCT_OUT)/OpenThos/kernel)
-endif
+OTO_BUILT_IMG := $(addprefix $(PRODUCT_OUT)/,ramdisk.img oto_initrd.img install.img system.sfs)
+OTO_BUILT_IMG += $(if $(TARGET_PREBUILT_KERNEL),$(TARGET_PREBUILT_KERNEL),$(PRODUCT_OUT)/kernel)
 REFIND=efi.tar.bz2
 OTO_IMAGE := $(PRODUCT_OUT)/$(TARGET_PRODUCT)_oto.img
 ESP_LAYOUT := $(LOCAL_PATH)/editdisklbl/esp_layout.conf
@@ -141,6 +151,7 @@ $(OTO_IMAGE): $(wildcard $(LOCAL_PATH)/boot/efi/*/*) $(BUILT_IMG) $(DATA_IMG) $(
 	@tar jcvf $(REFIND) -C $(<D)/../../../install/refind efi
 	@mv $(REFIND) $(PRODUCT_OUT)/OpenThos/
 	$(shell cp $(BUILT_IMG) $(DATA_IMG) $(PRODUCT_OUT)/OpenThos/ -f)
+	$(shell mv $(PRODUCT_OUT)/OpenThos/oto_initrd.img $(PRODUCT_OUT)/OpenThos/initrd.img -f)
 	@echo $(<D)   $(@D)
 	$(hide) sed "s|VER|$(VER)|; s|CMDLINE|$(BOARD_KERNEL_CMDLINE)|" $(<D)/../../../otoinit/grub.cfg > $(@D)/grub.cfg
 	$(hide) size=0; \

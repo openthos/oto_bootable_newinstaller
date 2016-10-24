@@ -1,0 +1,484 @@
+#
+# By 
+#  Chih-Wei Huang   <cwhuang@linux.org.tw>
+#  Yu Chen          <yuchen@tsinghua.edu.cn>
+# Last updated 2016/08/06
+#
+# License: GNU Public License
+# We explicitely grant the right to use the scripts
+# with Android-x86 project.
+#
+
+tempfile=/tmp/temp-$$
+menufile=/tmp/menu-$$
+
+CPIO=cpio
+
+rebooting()
+{
+	dialog --title " Rebooting... " --nocancel --pause "" 8 41 1
+	sync
+	umount -a
+	reboot -f
+}
+
+choose()
+{
+	dialog --clear --title " $1 " \
+		--menu "$2" 20 71 13 --file $menufile 2> $tempfile
+
+	retval=$?
+	choice=`cat $tempfile`
+}
+
+partition_drive()
+{
+	echo partition_drive ...
+	
+	echo -n > $menufile
+	for i in /sys/block/[shv]d[a-z] /sys/block/mmcblk?; do
+		if [ ! -d $i ]; then  # pathname expansion failed
+			continue
+		fi
+		echo -n `basename $i` >> $menufile
+		if [ -f $i/removable -a `cat $i/removable` -eq 0 ]; then
+			echo -n ' "Harddisk ' >> $menufile
+		else
+			echo -n ' "Removable' >> $menufile
+		fi
+		if [ -f $i/size ]; then
+			echo -n " (" `cat $i/size` "blocks)" >> $menufile
+		fi
+		echo '"' >> $menufile
+	done
+	count=`wc -l $menufile | awk '{ print $1 }'`
+	if [ $count -eq 0 ]; then
+		dialog --title " Error " --msgbox \
+			"\nOK. There is no hard drive to edit partitions." 8 49
+		return 255
+	fi
+	if [ $count -eq 1 ]; then
+		choice=`awk '{ print $1 }' $menufile`
+		retval=0
+	else
+		choose "Choose Drive" "Please select a drive to edit partitions:"
+	fi
+	if [ $retval -eq 0 ]; then
+		dialog --title " Confirm " --defaultno --yesno "\n Do you want to use GPT?" 7 29
+		if [ $? -eq 0 ]; then
+			cgdisk /dev/$choice
+		else
+			cfdisk /dev/$choice
+		fi
+		if [ $? -eq 0 ]; then
+			retval=1
+		else
+			retval=255
+		fi
+	fi
+	return $retval
+}
+
+select_dev()
+{
+	echo select_dev ...
+	
+	blkid | grep -v -E "^/dev/block/|^/dev/loop" | cut -b6- | sort | awk '{
+		t="unknown"
+		for (i = NF; i > 1; --i)
+			if (match($i, "^TYPE")) {
+				t=$i
+				break
+			}
+		gsub(/TYPE=|"/, "", t)
+		printf("%s\t%s\n", $1, t)
+	}' > $tempfile
+
+	lsblk=`ls /sys/block | grep -v -E "loop|ram|sr|boot|rpmb"`
+	for d in $lsblk; do
+		p=0
+		for i in /sys/block/$d/$d* /sys/block/$d; do
+			[ -e $i/partition ] && p=1
+			[ $p -eq 1 -a "$i" = "/sys/block/$d" ] && break
+			echo $i | grep -q -E "boot|rpmb" && continue
+			[ -d $i ] && ( grep "`basename $i:`" $tempfile || echo "`basename $i` unknown" )
+		done
+	done | awk '{
+		sub(/:/, "", $1)
+		printf("\"%-13s%-17s", $1, $2)
+		system("cd /sys/block; for f in "$1"/device/model "$1"/device/name */"$1"/../device/model */"$1"/../device/name; do [ -e $f ] && echo -n `cat $f` && break; done")
+		printf("\" \"\"\n")
+	} END {
+		printf("\"Create/Modify partitions\" \"\"\n\"Detect devices\" \"\"")
+	}' > $menufile
+	choose "Choose Partition" "Please select a partition to install OPENTHOS:"
+	return $retval
+}
+
+progress_bar()
+{
+	dialog --clear --title " $1 " --gauge "\n $2" 8 70
+}
+
+format_fs()
+{
+	local cmd
+	echo -e '"Do not format" ""\next4 ""\next3 ""\next2 ""\nntfs ""\nfat32 ""' > $menufile
+	choose "Choose filesystem" "Please select a filesystem to format $1:"
+	case "$choice" in
+		ext4)
+			cmd="make_ext4fs -L"
+			;;
+		ext3)
+			cmd="mke2fs -jL"
+			;;
+		ext2)
+			cmd="mke2fs -L"
+			;;
+		ntfs)
+			cmd="mkntfs -fL"
+			;;
+		fat32)
+			cmd="mkdosfs -n"
+			;;
+		*)
+			;;
+	esac
+	if [ -n "$cmd" ]; then
+		dialog --title " Confirm " --defaultno --yesno \
+			"\n You chose to format $1 to $choice.\n All data in that partition will LOSE.\n\n Are you sure to format the partition $1?" 10 51
+		[ $? -ne 0 ] && return 1
+		$cmd Android-x86 /dev/$1 | awk '{
+			# FIXME: very imprecise progress
+			if (match($0, "done"))
+				printf("%d\n", i+=33)
+		}' | progress_bar "Formatting" "Formatting partition $1..."
+	fi
+}
+
+create_entry()
+{
+	title=$1
+	shift
+	echo -e "title $title\n\tkernel /$asrc/kernel$vga $@ SRC=/$asrc\n\tinitrd /$asrc/initrd.img\n" >> $menulst
+}
+
+create_newest_entry()
+{
+	title=$1
+	shift
+	echo -e "title $title\n\tkernel /$newasrc/kernel$vga $@ SRC=/$newasrc\n\tinitrd /$newasrc/initrd.img\n" >> $menulst
+}
+
+
+create_menulst()
+{
+	menulst=/hd/grub/menu.lst
+	[ -n "$VESA" ] && vga=" vga=788 modeset=0"
+	echo -e "${GRUB_OPTIONS:-default=0\ntimeout=6\nsplashimage=/grub/android-x86.xpm.gz\n}root (hd0,$1)\n" > $menulst
+
+	create_entry "OPENTHOS $VER" $cmdline
+	create_entry "OPENTHOS $VER (Debug mode)" $cmdline console=ttyS0 DEBUG=2
+	create_newest_entry "OPENTHOS Newest" $cmdline
+	create_Newest_entry "OPENTHOS Newest (Debug mode)" $cmdline console=ttyS0 DEBUG=2
+}
+
+create_winitem()
+{
+	win=`fdisk -l /dev/$(echo $1 | cut -b-3) | grep ^/dev | cut -b6-12,55- | awk '{
+		if (match($2, "NTFS"))
+			print $1
+	}' | head -1`
+	if [ -n "$win" ]; then
+		dialog --title " Confirm " --yesno \
+			"\nThe installer found a Windows partition in /dev/$win.\n\nDo you want to create a boot item for Windows?" 9 59
+		[ $? -ne 0 ] && return 1
+		wp=$((`echo $win | cut -b4-`-1))
+		echo -e "title Windows\n\trootnoverify (hd$d,$wp)\n\tchainloader +1\n" >> $menulst
+	fi
+}
+
+create_img()
+{
+	bname=`basename $2`
+	if [ -e $2 ]; then
+		dialog --title " Confirm " --defaultno --yesno \
+			"\n $bname exists. Overwrite it?" 7 38
+		[ $? -ne 0 ] && return 255
+		rm -f $2
+	fi
+	dialog --title " Question " --nook --nocancel --inputbox \
+		"\nPlease input the size of the $bname in MB (max 2047):" 8 63 $1 2> $tempfile
+	size=`cat $tempfile`
+	[ 0$size -le 0 -o 0$size -gt 2047 ] && size=2047
+	( dd bs=1M count=$size if=/dev/zero | pv -ns ${size}m | dd of=$2 ) 2>&1 \
+		| progress_bar "Creating $bname" "Expect to write $size MB..."
+}
+
+create_data_img()
+{
+	dialog --title " Confirm " --yesno \
+		"\nThe installer is going to create a disk image to save the user data. At least 512MB free disk space is recommended.\n\nAre you sure to create the image?" 11 62
+
+	if [ $? -eq 0 ]; then
+		if create_img 512 data.img; then
+			losetup /dev/loop6 data.img
+			make_ext4fs -L /data /dev/loop6 > /dev/tty6
+		fi
+		[ $? -ne 0 ] && dialog --msgbox "\n Failed to create data.img." 7 33
+	else
+		dialog --title " Warning " --msgbox \
+			"\nOK. So data will be save to a RAMDISK(tmpfs), and lose after power off." 8 49
+	fi
+}
+
+try_upgrade()
+{
+	echo try_upgrade ...
+	
+	PREV_VERS="2016-* 2017-* 2018-*"
+	for v in $PREV_VERS; do
+		PREV_OSES=hd/android-$v
+		echo "DIRS " $PREV_OSES
+		for prev_os in $PREV_OSES; do
+		    if [ -d $prev_os ]; then
+		        echo "Find os" $prev_os
+			    dialog --title " Question " --yesno \
+				    "\nAn older OPENTHOS version $prev_os is detected. Would you like to upgrade it?" 8 55
+			    if [ $? -eq 0 ]; then
+			        if [ $prev_os != $1 ]; then
+			            if [ -d $1 ]; then
+			                echo $prev_os "!=" $1 ", and" $1 "DIR existed"
+				            dialog --title "NOTICE" --yesno \
+							    	"\n $1 existed. Do you want to break upgrade?." 10 61
+					        if [ $? -eq 0 ]; then
+					            continue
+					        else
+					             dialog --title "NOTICE" --yesno \
+							    	  "\n Do you want to remove $1 and upgrade $prev_os?." 10 61
+							     if [ $? -eq 0 ]; then
+					                  rm -rf $1
+				    	              mv $prev_os $1
+				    	              rm -rf $1/data/dalvik-cache/* $1/data/system/wpa_supplicant
+				    	              sed -i 's/\(ctrl_interface=\)\(.*\)/\1wlan0/' $1/data/misc/wifi/wpa_supplicant.conf
+				    	              break 2		    					                  
+					             else
+					                  continue
+					             fi
+					        fi     					                  
+					    else
+					        echo $prev_os "!=" $1 "and no" $1 "DIR"
+				    	    mv $prev_os $1
+				    	    rm -rf $1/data/dalvik-cache/* $1/data/system/wpa_supplicant
+				    	    sed -i 's/\(ctrl_interface=\)\(.*\)/\1wlan0/' $1/data/misc/wifi/wpa_supplicant.conf
+				    	    break 2		    
+					    fi					    
+				    else
+				        echo $prev_os "==" $1 " But still upgrade!"
+				    	#mv $prev_os $1
+				    	rm -rf $1/data/dalvik-cache/* $1/data/system/wpa_supplicant
+				    	sed -i 's/\(ctrl_interface=\)\(.*\)/\1wlan0/' $1/data/misc/wifi/wpa_supplicant.conf
+				    	break 2
+					fi
+			    fi
+	        else
+	            echo "Did not find" $prev_os
+		    fi
+		 done
+	done
+}
+
+get_part_info()
+{
+	d=0
+	while [ 1 ]; do
+		h=`echo $d | awk '{ printf("%c", $1+97) }'`
+		for part in /sys/block/[shv]d$h/$1 /sys/block/mmcblk$d/$1; do
+			[ -d $part ] && break 2
+		done
+		d=$(($d+1))
+	done
+	p=`cat $part/partition`
+	disk=$(basename `dirname $part`)
+}
+
+install_to()
+{
+	echo install_to ...
+
+	cd /
+	mountpoint -q /hd && umount /hd
+	while [ 1 ]; do
+		format_fs $1
+		try_mount rw /dev/$1 /hd && break
+		dialog --clear --title " Error " --defaultno --yesno \
+			"\n Cannot mount /dev/$1\n Do you want to format it?" 8 37
+		[ $? -ne 0 ] && return 255
+	done
+
+	fs=`cat /proc/mounts | grep /dev/$1 | awk '{ print $3 }'`
+	cmdline=`sed "s|\(initrd.*img\s*\)||; s|quiet\s*||; s|\(vga=\w\+\?\s*\)||; s|\(DPI=\w\+\?\s*\)||; s|\(INSTALL=\w\+\?\s*\)||; s|\(SRC=\S\+\?\s*\)||; s|\(DEBUG=\w\+\?\s*\)||; s|\(BOOT_IMAGE=\S\+\?\s*\)||" /proc/cmdline`
+
+	asrc=android-$VER
+	dialog --title " Confirm " --no-label Skip --defaultno --yesno \
+		"\n Do you want to install boot loader GRUB?" 7 47
+	if [ $? -eq 0 ]; then
+		cp -af /grub /hd
+		get_part_info $1
+		p=$(($p-1))
+		create_menulst $p
+		create_winitem $1 $d
+		rm -f /hd/boot/grub/stage1
+		echo "(hd$d) /dev/$disk" > /hd/grub/device.map
+		echo "setup (hd$d) (hd$d,$p)" | grub --device-map /hd/grub/device.map > /dev/tty5
+		[ $? -ne 0 ] && return 255
+	fi
+
+	dialog --title " Confirm " --no-label Skip --defaultno --yesno \
+		"\n Do you want to install EFI GRUB2?" 7 39
+	if [ $? -eq 0 ]; then
+		get_part_info $1
+		for i in /sys/block/$disk/$disk*; do
+			[ 0`cat $i/partition` -eq 1 ] && break
+		done
+		boot=`basename $i`
+		mountpoint -q /hd && umount /hd
+		dialog --title " Confirm " --defaultno --yesno \
+			"\n Do you want to format the boot partition\n /dev/$boot?" 8 45
+		[ $? -eq 0 ] && mkdosfs -n EFI /dev/$boot
+		try_mount rw /dev/$boot /hd
+		cp -af /grub2/efi /hd
+		grubcfg=/hd/efi/boot/grub.cfg
+		echo -e "set timeout=6\nset gfxmode=1024x768\nterminal_output gfxterm\n\n" > $grubcfg
+		echo -e "menuentry \"OPENTHOS $VER\" {\n\tsearch --set=root --file /$asrc/kernel\n\tlinuxefi /$asrc/kernel quiet $cmdline \n\tinitrdefi /$asrc/initrd.img\n}" >> $grubcfg
+		echo -e "menuentry \"OPENTHOS $VER (DEBUG mode)\" {\n\tsearch --set=root --file /$asrc/kernel\n\tlinuxefi /$asrc/kernel $cmdline DEBUG=2\n\tinitrdefi /$asrc/initrd.img\n}" >> $grubcfg
+#add newest updated OPENTHOS entry
+		echo -e "menuentry \"OPENTHOS Newest\" {\n\tsearch --set=root --file /$newasrc/kernel\n\tlinuxefi /$newasrc/kernel quiet $cmdline \n\tinitrdefi /$newasrc/initrd.img\n}" >> $grubcfg
+		echo -e "menuentry \"OPENTHOS Newest (DEBUG mode)\" {\n\tsearch --set=root --file /$newasrc/kernel\n\tlinuxefi /$newasrc/kernel quiet $cmdline DEBUG=2\n\tinitrdefi /$newasrc/initrd.img\n}" >> $grubcfg		
+
+		if [ -e /hd/EFI/Microsoft/Boot/bootmgfw.efi ]; then
+			echo -e "menuentry \"Windows (UEFI)\" {\n\tsearch --set=root --file /EFI/Microsoft/Boot/bootmgfw.efi\n\tchainloader /EFI/Microsoft/Boot/bootmgfw.efi\n}" >> $grubcfg
+		fi
+		mountpoint -q /hd && umount /hd
+		try_mount rw /dev/$1 /hd
+	fi
+
+	dialog --title " Question " --yesno \
+		"\nDo you want to install /system directory as read-write?\n\nMaking /system be read-write is easier for debugging, but it needs more disk space and longer installation time." 10 61
+	instal_rw=$?
+
+	files="mnt/$SRC/kernel mnt/$SRC/initrd.img mnt/$SRC/ramdisk.img"
+	if [ $instal_rw -eq 0 ]; then
+		if [ "$fs" = "vfat" -o "$fs" = "fuseblk" ]; then
+			[ -e /sfs/system.img ] && sysimg="/sfs/system.img" || sysimg="mnt/$SRC/system.*"
+		else
+			sysimg="android/system"
+		fi
+	else
+		sysimg="mnt/$SRC/system.*"
+	fi
+	files="$files $sysimg"
+	size=0
+	for s in `du -sk $files | awk '{print $1}'`; do
+		size=$(($size+$s))
+	done
+	
+	try_upgrade hd/$asrc
+	
+	mkdir -p hd/$asrc
+	cd hd/$asrc
+	rm -rf system*
+	( ( cd /; find $files | $CPIO -H newc -o ) | pv -ns ${size}k | ( $CPIO -iud > /dev/null; echo $? > /tmp/result )) 2>&1 \
+		| progress_bar "Installing OPENTHOS" "Expect to write $size KB..."
+	result=$((`cat /tmp/result`*255))
+
+	#chyyuu: What's the meaning of below codes of 7???
+	if [ $result -eq 0 ]; then
+		for d in android mnt sfs ./$SRC; do
+			[ -d $d ] && mv $d/* . && rmdir $d
+		done
+		chown 0.0 *
+		for f in *; do
+			[ -d $f ] || chmod 644 $f
+		done
+
+		case "$fs" in
+			vfat|fuseblk)
+				create_data_img
+				;;
+			*)
+				mkdir -p data
+				;;
+		esac
+	fi
+
+	dialog --infobox "\n Syncing to disk..." 5 27
+	sleep 1
+	sync
+
+	return $result
+}
+
+install_hd()
+{
+	echo install_hd ...
+
+	select_dev || rebooting
+	retval=1
+	case "$choice" in
+		[shvm][dm]*)
+			install_to $choice
+			retval=$?
+			;;
+		Create*)
+			partition_drive
+			retval=$?
+			;;
+		Detect*)
+			dialog --title " Detecting... " --nocancel --pause "" 8 41 1
+			;;
+	esac
+	return $retval
+}
+
+do_install()
+{
+	echo do_install ...
+    # for newest android boot entry
+	newasrc=androidnewest
+	until install_hd; do
+		if [ $retval -eq 255 ]; then
+			dialog --title ' Error! ' --yes-label Retry --no-label Reboot \
+				--yesno '\nInstallation failed! Please check if you have enough free disk space to install OPENTHOS.' 8 51
+			[ $? -eq 1 ] && rebooting
+		fi
+	done
+
+	[ -n "$VESA" ] || runit="Run OPENTHOS"
+	dialog --clear --title ' Congratulations! ' \
+		--menu "\n OPENTHOS is installed successfully.\n " 11 51 13 \
+		"$runit" "" "Reboot" "" 2> $tempfile
+	case "`cat $tempfile`" in
+		Run*)
+			cd /android
+			umount system
+			mountpoint -q /sfs && umount /sfs
+			if [ -e /hd/$asrc/system.sfs ]; then
+				mount -o loop /hd/$asrc/system.sfs /sfs
+				mount -o loop /sfs/system.img system
+			elif [ -e /hd/$asrc/system.img ]; then
+				mount -o loop /hd/$asrc/system.img system
+			else
+				mount --bind /hd/$asrc/system system
+			fi
+			if [ -d /hd/$asrc/data ]; then
+				mount --bind /hd/$asrc/data data
+			elif [ -e /hd/$asrc/data.img ]; then
+				mount -o loop /hd/$asrc/data.img data
+			fi
+			;;
+		*)
+			rebooting
+			;;
+	esac
+}
