@@ -79,7 +79,6 @@ $(INITRD_RAMDISK): $(initrd_bin) $(systemimg) $(TARGET_INITRD_SCRIPTS) | $(ACP) 
 	ln -s /bin/ld-linux.so.2 $(TARGET_INSTALLER_OUT)/lib
 	mkdir -p $(addprefix $(TARGET_INSTALLER_OUT)/,android iso mnt proc sys tmp sfs hd)
 	echo "VER=$(VER)" > $(TARGET_INSTALLER_OUT)/scripts/00-ver
-	$(shell if [ -n $OTO_IMAGE ];then echo "cp $(initrd_dir)/../otoinit/init $(TARGET_INSTALLER_OUT)/init";fi)
 	$(MKBOOTFS) $(TARGET_INSTALLER_OUT) | gzip -9 > $@
 
 OTO_INITRD_RAMDISK := $(PRODUCT_OUT)/oto_initrd.img
