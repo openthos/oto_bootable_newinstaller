@@ -313,18 +313,9 @@ boto_install_to()
 		[ $? -ne 0 ] && return 255
 	done
 
-	fs=`cat /proc/mounts | grep /dev/$1 | awk '{ print $3 }'`
-	cmdline=`sed "s|\(initrd.*img\s*\)||; s|quiet\s*||; s|\(vga=\w\+\?\s*\)||; s|\(DPI=\w\+\?\s*\)||; s|\(INSTALL=\w\+\?\s*\)||; s|\(SRC=\S\+\?\s*\)||; s|\(DEBUG=\w\+\?\s*\)||; s|\(BOOT_IMAGE=\S\+\?\s*\)||" /proc/cmdline`
-
-
-	get_part_info $1
-	for i in /sys/block/$disk/$disk*; do         ##should use UUID
-		[ 0`cat $i/partition` -eq 1 ] && break
-	done
-	boot=`basename $i`
 	mountpoint -q /hd && umount /hd
-	mkfs.vfat -n EFI /dev/$boot
-	try_mount rw /dev/$boot /hd
+	mkfs.vfat -n EFI /dev/$1
+	try_mount rw /dev/$1 /hd
 
 	size=0
 	for s in `cd /mnt/$SRC/;du -sk $files | awk '{print $1}'`; do
@@ -395,21 +386,24 @@ boto_data_install_to()
 }
 boto_hdimg_system()
 {
-	select_dev "SYSTEM"|| rebooting
-	retval=1
-	case "$choice" in
-		[shvm][dm]*)
-			boto_install_to $choice
-			retval=$?
-			;;
-		Create*)
-			partition_drive
-			retval=$?
-			;;
-		Detect*)
-			dialog --title " Detecting... " --nocancel --pause "" 8 41 1
-			;;
-	esac
+	while [ 1 ];do
+		select_dev "SYSTEM"|| rebooting
+		retval=1
+		case "$choice" in
+			[shvm][dm]*)
+				boto_install_to $choice
+				retval=$?
+				break
+				;;
+			Create*)
+				partition_drive
+				retval=$?
+				;;
+			Detect*)
+				dialog --title " Detecting... " --nocancel --pause "" 8 41 1
+				;;
+		esac
+	done
 	return $retval
 }
 

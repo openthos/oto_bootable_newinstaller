@@ -89,12 +89,12 @@ $(OTO_INITRD_RAMDISK): $(initrd_bin) $(systemimg) $(TARGET_INITRD_SCRIPTS) | $(A
 	ln -s /bin/ld-linux.so.2 $(TARGET_INSTALLER_OUT)/lib
 	mkdir -p $(addprefix $(TARGET_INSTALLER_OUT)/,android iso mnt proc sys tmp sfs hd)
 	echo "VER=$(VER)" > $(TARGET_INSTALLER_OUT)/scripts/00-ver
-	$(ACP) -p $(initrd_dir)/../otoinit/init $(TARGET_INSTALLER_OUT)/
-	$(ACP) -p $(initrd_dir)/../otoinit/install_scripts/* $(TARGET_INSTALLER_OUT)/scripts/
+	$(ACP) -fp $(initrd_dir)/../otoinit/init $(TARGET_INSTALLER_OUT)/
+	$(ACP) -fp $(initrd_dir)/../otoinit/install_scripts/* $(TARGET_INSTALLER_OUT)/scripts/
 	$(MKBOOTFS) $(TARGET_INSTALLER_OUT) | gzip -9 > $@
 
 INSTALL_RAMDISK := $(PRODUCT_OUT)/install.img
-$(INSTALL_RAMDISK): $(wildcard $(LOCAL_PATH)/install/*/* $(LOCAL_PATH)/install/*/*/*/*) | $(MKBOOTFS)
+$(INSTALL_RAMDISK): $(wildcard $(LOCAL_PATH)/install/*/* $(LOCAL_PATH)/install/*/*/*/* $(LOCAL_PATH)/otoinit/install_scripts/*) | $(MKBOOTFS)
 	$(if $(TARGET_INSTALL_SCRIPTS),$(ACP) -p $(TARGET_INSTALL_SCRIPTS) $(TARGET_INSTALLER_OUT)/scripts)
 	$(MKBOOTFS) $(dir $(dir $(<D))) | gzip -9 > $@
 
