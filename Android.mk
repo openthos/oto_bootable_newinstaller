@@ -89,8 +89,8 @@ $(OTO_INITRD_RAMDISK): $(initrd_bin) $(systemimg) $(TARGET_INITRD_SCRIPTS) | $(A
 	ln -s /bin/ld-linux.so.2 $(TARGET_INSTALLER_OUT)/lib
 	mkdir -p $(addprefix $(TARGET_INSTALLER_OUT)/,android iso mnt proc sys tmp sfs hd)
 	echo "VER=$(VER)" > $(TARGET_INSTALLER_OUT)/scripts/00-ver
-	$(if $(TARGET_INITRD_SCRIPTS),$(ACP) -p $(initrd_dir)/../otoinit/init $(TARGET_INSTALLER_OUT)/)
-	$(if $(TARGET_INITRD_SCRIPTS),$(ACP) -p $(initrd_dir)/../otoinit/install_scripts/* $(TARGET_INSTALLER_OUT)/install/scripts/)
+	$(ACP) -p $(initrd_dir)/../otoinit/init $(TARGET_INSTALLER_OUT)/
+	$(ACP) -p $(initrd_dir)/../otoinit/install_scripts/* $(TARGET_INSTALLER_OUT)/scripts/
 	$(MKBOOTFS) $(TARGET_INSTALLER_OUT) | gzip -9 > $@
 
 INSTALL_RAMDISK := $(PRODUCT_OUT)/install.img
@@ -145,11 +145,11 @@ OTO_BUILT_IMG += $(if $(TARGET_PREBUILT_KERNEL),$(TARGET_PREBUILT_KERNEL),$(PROD
 REFIND=efi.tar.bz2
 OTO_IMAGE := $(PRODUCT_OUT)/$(TARGET_PRODUCT)_oto.img
 ESP_LAYOUT := $(LOCAL_PATH)/editdisklbl/esp_layout.conf
-$(OTO_IMAGE): $(wildcard $(LOCAL_PATH)/boot/efi/*/*) $(BUILT_IMG) $(DATA_IMG) $(ESP_LAYOUT) | $(edit_mbr)
+$(OTO_IMAGE): $(wildcard $(LOCAL_PATH)/boot/efi/*/*) $(OTO_BUILT_IMG) $(DATA_IMG) $(ESP_LAYOUT) | $(edit_mbr)
 	$(shell if [ ! -d  $(@D)/OpenThos ];then mkdir $(@D)/OpenThos;fi)
 	@tar jcvf $(REFIND) -C $(<D)/../../../install/refind efi
 	@mv $(REFIND) $(PRODUCT_OUT)/OpenThos/
-	$(shell cp $(BUILT_IMG) $(DATA_IMG) $(PRODUCT_OUT)/OpenThos/ -f)
+	$(shell cp $(OTO_BUILT_IMG) $(DATA_IMG) $(PRODUCT_OUT)/OpenThos/ -f)
 	$(shell mv $(PRODUCT_OUT)/OpenThos/oto_initrd.img $(PRODUCT_OUT)/OpenThos/initrd.img -f)
 	@echo $(<D)   $(@D)
 	$(hide) sed "s|VER|$(VER)|; s|CMDLINE|$(BOARD_KERNEL_CMDLINE)|" $(<D)/../../../otoinit/grub.cfg > $(@D)/grub.cfg
