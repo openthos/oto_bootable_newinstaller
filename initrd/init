@@ -143,14 +143,10 @@ done
 
 mount -t tmpfs tmpfs /android
 cd /android
-disk_list="g f e d c b a"
 while :; do
-       for disk in $disk_list
-       do
-               for device in ${ROOT:-/dev/[hmsv][dmr]$disk*}; do
-                       check_root $device && break 3
-                       mountpoint -q /mnt && umount /mnt
-               done
+       for device in ${ROOT:-/dev/[hmsv][dmr][0-9a-z]*}; do
+               check_root $device && break 2
+               mountpoint -q /mnt && umount /mnt
 	done
 	sleep 1
 	echo -n .
