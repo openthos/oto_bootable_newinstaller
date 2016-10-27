@@ -15,7 +15,7 @@ MOUNT="/mnt/data"
 CPIO=cpio
 asrc="OpenThos"
 SRC="livemedia/OpenThos"
-files="/mnt/$SRC/kernel /mnt/$SRC/initrd.img /mnt/$SRC/ramdisk.img"
+files="/mnt/$SRC/install.img /mnt/$SRC/kernel /mnt/$SRC/initrd.img /mnt/$SRC/ramdisk.img"
 try_mount()
 {
 	RW=$1; shift
@@ -375,7 +375,7 @@ boto_install_to()
 	CMD="options \"quiet androidboot.hardware=android_x86_64 BOOT_MODE=hdboot RAMDISK_HD_UUID=$UUID RAMDISK_IMG=OpenThos/ramdisk.img "
 	
 	#extract image file to install device
-	files="/mnt/$SRC/kernel /mnt/$SRC/initrd.img /mnt/$SRC/ramdisk.img"
+	files="/mnt/$SRC/install.img /mnt/$SRC/kernel /mnt/$SRC/initrd.img /mnt/$SRC/ramdisk.img"
 
 	mkdir -p hd/$asrc
 	cp $files /hd/$asrc/ -rf
