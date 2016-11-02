@@ -30,6 +30,9 @@ $(shell echo "" >>$(PRODUCT_OUT)/system/ReleaseNote.txt)
 $(shell echo "OpenThos is modern desktop OS based on android" >>$(PRODUCT_OUT)/system/ReleaseNote.txt)
 $(shell echo "Rleased by: Tsinghua University" >>$(PRODUCT_OUT)/system/ReleaseNote.txt)
 $(shell echo "Build Date:`date`" >>$(PRODUCT_OUT)/system/ReleaseNote.txt)
+$(shell echo "version:1.8.7" > $(PRODUCT_OUT)/system/version)
+$(shell echo -n "date:" >> $(PRODUCT_OUT)/system/version)
+$(shell date "+%Y.%m.%d" >> $(PRODUCT_OUT)/system/version)
 
 
 # use squashfs for iso, unless explictly disabled
