@@ -169,11 +169,12 @@ select_dev()
 			[ -e $i/partition ] && p=1
 			[ $p -eq 1 -a "$i" = "/sys/block/$d" ] && break
 			echo $i | grep -q -E "boot|rpmb" && continue
-			[ -d $i ] && ( grep "`basename $i:`" $tempfile || echo "`basename $i` unknown" )
+			[ -d $i ] && ( tmps=`grep "\`basename $i:\`" $tempfile`;if [ -n "`echo -n "$tmps"`" ];then echo -n $tmps;else echo -n "`basename $i` unknown";fi )
+			[ -d $i ] && ( disk=`basename $i`; partition_size=`blockdev --getsize64 /dev/$disk`;echo " "`expr $partition_size / 1024`"KB" )
 		done
 	done | awk '{
 		sub(/:/, "", $1)
-		printf("\"%-13s%-17s", $1, $2)
+		printf("\"%-13s%-17s%-13s", $1, $2, $3)
 		system("cd /sys/block; for f in "$1"/device/model "$1"/device/name */"$1"/../device/model */"$1"/../device/name; do [ -e $f ] && echo -n `cat $f` && break; done")
 		printf("\" \"\"\n")
 	} END {
@@ -204,11 +205,12 @@ select_data_dev()
 			[ -e $i/partition ] && p=1
 			[ $p -eq 1 -a "$i" = "/sys/block/$d" ] && break
 			echo $i | grep -q -E "boot|rpmb" && continue
-			[ -d $i ] && ( grep "`basename $i:`" $tempfile || echo "`basename $i` unknown" )
+			[ -d $i ] && ( tmps=`grep "\`basename $i:\`" $tempfile`;if [ -n "`echo -n "$tmps"`" ];then echo -n $tmps;else echo -n "`basename $i` unknown";fi )
+			[ -d $i ] && ( disk=`basename $i`; partition_size=`blockdev --getsize64 /dev/$disk`;echo " "`expr $partition_size / 1024`"KB" )
 		done
 	done | awk '{
 		sub(/:/, "", $1)
-		printf("\"%-13s%-17s", $1, $2)
+		printf("\"%-13s%-17s%-13s", $1, $2, $3)
 		system("cd /sys/block; for f in "$1"/device/model "$1"/device/name */"$1"/../device/model */"$1"/../device/name; do [ -e $f ] && echo -n `cat $f` && break; done")
 		printf("\" \"\"\n")
 	} END {
@@ -237,11 +239,12 @@ select_system_dev()
 			[ -e $i/partition ] && p=1
 			[ $p -eq 1 -a "$i" = "/sys/block/$d" ] && break
 			echo $i | grep -q -E "boot|rpmb" && continue
-			[ -d $i ] && ( grep "`basename $i:`" $tempfile || echo "`basename $i` unknown" )
+			[ -d $i ] && ( /sbin/grep -z "`basename $i:`" $tempfile || echo -n "`basename $i` unknown" )
+			[ -d $i ] && ( disk=`basename $i`; partition_size=`blockdev --getsize64 /dev/$disk`;echo " "`expr $partition_size / 1024`"KB" )
 		done
 	done | awk '{
 		sub(/:/, "", $1)
-		printf("\"%-13s%-17s", $1, $2)
+		printf("\"%-13s%-17s%-13s", $1, $2, $3)
 		system("cd /sys/block; for f in "$1"/device/model "$1"/device/name */"$1"/../device/model */"$1"/../device/name; do [ -e $f ] && echo -n `cat $f` && break; done")
 		printf("\" \"\"\n")
 	} END {
