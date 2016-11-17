@@ -173,7 +173,7 @@ UPDATE_LIST=$(LOCAL_PATH)/../../bootable/newinstaller/otoinit/update.list
 UPDATE=openthos
 VERSION:=$(shell cat $(VERSION_FILE)|grep OpenThos|awk '{print $$2;}')
 
-UPDATE_IMG:= $(addprefix $(PRODUCT_OUT)/, $(shell cat $(UPDATE_LIST)))
+UPDATE_IMG:= $(addprefix $(PRODUCT_OUT)/OpenThos/, $(shell cat $(UPDATE_LIST)))
 UPDATE_ZIP := $(PRODUCT_OUT)/$(UPDATE)_$(VERSION).zip
 $(UPDATE_ZIP): $(VERSION_FILE) $(UPDATE_LIST)
 	zip -qj $(UPDATE_ZIP) $(UPDATE_IMG) $(VERSION_FILE) $(UPDATE_LIST)
