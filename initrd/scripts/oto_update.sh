@@ -300,8 +300,8 @@ openthos_update()
       else
         openthos_update_stage2
       fi
-      if [ -d /android/data/dalvik-cache ]; then
-        rm -rf /android/data/dalvik-cache/*
+      if [ -d /mnt/data/dalvik-cache ]; then
+        rm -rf /mnt/data/dalvik-cache/*
       fi
       ;;
     *)
