@@ -401,6 +401,8 @@ echo "mount -o loop $varImg $sfsMountPoint"
     
     
     get_param_from_bootargs INST_MODE
+    insmod /bin/efivarfs.ko
+    mount -t efivarfs efivars /sys/firmware/efi/efivars
     if [ "$INST_MODE" = "hdimg" ]; then
       source /scripts/2-boto_install
       hdimg_install

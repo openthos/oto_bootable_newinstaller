@@ -17,6 +17,8 @@ CPIO=cpio
 SRC="livemedia/OpenThos"
 files="kernel install.img initrd.img ramdisk.img system.*"
 asrc="OpenThos"
+grubcfg=/hd/OpenThos/boto_linux.conf
+bootdisk=""
 try_mount()
 {
 	RW=$1; shift
@@ -332,14 +334,10 @@ boto_install_to()
 	#extract refind install zip
 	cd /hd/$asrc
 	tar -xvf /mnt/$SRC/efi.tar.bz2 -C /hd/ > /dev/null
+	mv /hd/efi/boot /hd/efi/boto
 	UUID=`blkid /dev/$1|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
-	grubcfg=/hd/efi/boot/refind.conf	
-	echo -e "menuentry openthos {" >> $grubcfg
-	echo -e "\ticon EFI/boot/themes/boto/os_openthos.png" >> $grubcfg
-	echo -e "\tvolume $UUID" >> $grubcfg
-	echo -e "\tloader OpenThos/kernel" >> $grubcfg
-	echo -e "\tinitrd OpenThos/initrd.img" >> $grubcfg
-	CMD="options \"quiet androidboot.hardware=android_x86_64 BOOT_MODE=hdimgboot RAMDISK_HD_UUID=$UUID RAMDISK_IMG=OpenThos/ramdisk.img SYSTEM_HD_UUID=$UUID SYSTEM_IMG=OpenThos/system.sfs"
+	CMD="quiet androidboot.hardware=android_x86_64 BOOT_MODE=hdimgboot RAMDISK_HD_UUID=$UUID RAMDISK_IMG=OpenThos/ramdisk.img SYSTEM_HD_UUID=$UUID SYSTEM_IMG=OpenThos/system.sfs"
+        bootdisk=/dev/`cat "$1"|tr -d "0-9"`
 
 	#finish install openthos EFI partition
 	dialog --infobox "\n Syncing to disk..." 5 27
@@ -375,10 +373,10 @@ boto_data_install_to()
 	cd /
 
 	UUID=`blkid /dev/$1|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
-	grubcfg=/hd/efi/boot/refind.conf	
 	CMD="$CMD DATA_HD_UUID=$UUID DATA_IMG=openthos/data.img\""
-	echo $CMD >> $grubcfg
-	echo -e "\n}" >> $grubcfg
+	echo "\"OpenThos\"" \"$CMD\" > $grubcfg
+	echo "\"OpenThos DEBUG\"" \"$CMD DEBUG=1\" >> $grubcfg
+	efibootmgr -c -d $bootdisk -L OpenThos -l /efi/boto/bootx64.efi
 
 	dialog --infobox "\n Syncing data to disk..." 5 30
 	sleep 1
@@ -507,14 +505,10 @@ install_system()
 	( ( cd /mnt/$SRC/; find $files | $CPIO -H newc -o ) | pv -ns ${size}k | ( $CPIO -iu > /dev/null; echo $? > /tmp/result )) 2>&1 \
 		| progress_bar "Installing OPENTHOS" "Expect to write $size KB..."
 	tar -xvf /mnt/$SRC/efi.tar.bz2 -C /hd/ > /dev/null
+	mv /hd/efi/boot /hd/efi/boto
 	UUID=`blkid $1"1"|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
-	grubcfg=/hd/efi/boot/refind.conf	
-	echo -e "menuentry openthos {" >> $grubcfg
-	echo -e "\ticon EFI/boot/themes/boto/os_openthos.png" >> $grubcfg
-	echo -e "\tvolume $UUID" >> $grubcfg
-	echo -e "\tloader OpenThos/kernel" >> $grubcfg
-	echo -e "\tinitrd OpenThos/initrd.img" >> $grubcfg
-	CMD="options \"quiet androidboot.hardware=android_x86_64 BOOT_MODE=hdimgboot RAMDISK_HD_UUID=$UUID RAMDISK_IMG=OpenThos/ramdisk.img SYSTEM_HD_UUID=$UUID SYSTEM_IMG=OpenThos/system.sfs"
+	CMD="quiet androidboot.hardware=android_x86_64 BOOT_MODE=hdimgboot RAMDISK_HD_UUID=$UUID RAMDISK_IMG=OpenThos/ramdisk.img SYSTEM_HD_UUID=$UUID SYSTEM_IMG=OpenThos/system.sfs"
+	bootdisk=$1
 
 	sync;sync;sync
 	mkdir $MOUNT/openthos
@@ -522,9 +516,10 @@ install_system()
 	losetup /dev/loop6 $MOUNT/openthos/data.img
 	mke2fs -F -t ext4 -L data /dev/loop6 > /dev/tty6
 	UUID=`blkid "$1"2|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
-	CMD="$CMD DATA_HD_UUID=$UUID DATA_IMG=openthos/data.img\""
-	echo $CMD >> $grubcfg
-	echo -e "\n}" >> $grubcfg
+	CMD="$CMD DATA_HD_UUID=$UUID DATA_IMG=openthos/data.img"
+	echo "\"OpenThos\"" \"$CMD\" > $grubcfg
+	echo "\"OpenThos DEBUG\"" \"$CMD DEBUG=1\" >> $grubcfg
+	efibootmgr -c -d $bootdisk -L OpenThos -l /efi/boto/bootx64.efi
 	sync
 }
 earse_all_partition()

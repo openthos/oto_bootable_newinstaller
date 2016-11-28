@@ -152,10 +152,11 @@ $(OTO_IMAGE): $(wildcard $(LOCAL_PATH)/boot/efi/*/*) $(OTO_BUILT_IMG) $(DATA_IMG
 	$(shell if [ ! -d  $(@D)/OpenThos ];then mkdir $(@D)/OpenThos;fi)
 	@tar jcvf $(REFIND) -C $(<D)/../../../install/refind efi
 	@mv $(REFIND) $(PRODUCT_OUT)/OpenThos/
+	@cp $(<D)/../../../install/refind/boto_linux.conf $(PRODUCT_OUT)/OpenThos/
 	$(shell cp $(OTO_BUILT_IMG) $(DATA_IMG) $(PRODUCT_OUT)/OpenThos/ -f)
 	$(shell mv $(PRODUCT_OUT)/OpenThos/oto_initrd.img $(PRODUCT_OUT)/OpenThos/initrd.img -f)
 	@echo $(<D)   $(@D)
-	$(hide) sed "s|VER|$(VER)|; s|CMDLINE|$(BOARD_KERNEL_CMDLINE)|" $(<D)/../../../otoinit/grub.cfg > $(@D)/grub.cfg
+	#$(hide) sed "s|VER|$(VER)|; s|CMDLINE|$(BOARD_KERNEL_CMDLINE)|" $(<D)/../../../otoinit/grub.cfg > $(@D)/grub.cfg
 	$(hide) size=0; \
 	for s in `du -sk $^ | awk '{print $$1}'`; do \
 		size=$$(($$size+$$s)); \
@@ -163,8 +164,8 @@ $(OTO_IMAGE): $(wildcard $(LOCAL_PATH)/boot/efi/*/*) $(OTO_BUILT_IMG) $(DATA_IMG
 	s=`du -sk $(@D)/OpenThos/$(REFIND)|awk '{print $$1}'`;size=$$(($$size+$$s + 8096)); \
 	size=$$(($$(($$(($$(($$(($$size + $$(($$size / 100)))) - 1)) / 32)) + 1)) * 32)); \
 	rm -f $@.fat; mkdosfs -n OTO_INSTDSK -C $@.fat $$size
-	mcopy -Qsi $@.fat $(<D)/../../../install/grub2/efi $(PRODUCT_OUT)/OpenThos ::
-	$(hide) mcopy -Qoi $@.fat $(@D)/grub.cfg ::efi/boot
+	mcopy -Qsi $@.fat $(<D)/../../../install/refind/efi $(PRODUCT_OUT)/OpenThos ::
+	#$(hide) mcopy -Qoi $@.fat $(@D)/grub.cfg ::efi/boot
 	$(hide) cat /dev/null > $@; $(edit_mbr) -l $(ESP_LAYOUT) -i $@ esp=$@.fat
 	$(hide) rm -f $@.fat
 
