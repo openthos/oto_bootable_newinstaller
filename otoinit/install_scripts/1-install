@@ -373,7 +373,7 @@ boto_install_to()
 
 	UUID=`blkid /dev/$1|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
 	CMD="quiet androidboot.hardware=android_x86_64 BOOT_MODE=hdboot RAMDISK_HD_UUID=$UUID RAMDISK_IMG=OpenThos/ramdisk.img"
-        bootdisk=/dev/`cat "$1"|tr -d "0-9"`
+        bootdisk=/dev/`echo "$1"|tr -d "0-9"`
 	
 	#extract image file to install device
 	files="/mnt/$SRC/install.img /mnt/$SRC/kernel /mnt/$SRC/initrd.img /mnt/$SRC/ramdisk.img"
