@@ -465,9 +465,10 @@ boto_system_install_to()
 		mount -o loop /sfs/sfs/system.img /sfs/system
         fi
 	mount /dev/$1 /iso
-	cp -af /sfs/system/* /iso/ &
 	#This progress bar is fake
-	i=0;while [[ $i -lt 100 ]];do echo $i;i=`expr $i + 1`;sleep 0.1;done | dialog --title "copying System file" --gauge "copying......" 7 30
+	#i=0;while [[ $i -lt 100 ]];do echo $i;i=`expr $i + 1`;sleep 0.1;done | dialog --title "copying System file" --gauge "copying......" 7 30
+	echo "Install System File..."
+	cp -af /sfs/system/* /iso/
 
 	UUID=`blkid /dev/$1|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
 	CMD="$CMD SYSTEM_HD_UUID=$UUID "
