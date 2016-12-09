@@ -338,6 +338,7 @@ boto_install_to()
 	UUID=`blkid /dev/$1|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
 	CMD="quiet androidboot.hardware=android_x86_64 BOOT_MODE=hdimgboot RAMDISK_HD_UUID=$UUID RAMDISK_IMG=OpenThos/ramdisk.img SYSTEM_HD_UUID=$UUID SYSTEM_IMG=OpenThos/system.sfs"
         bootdisk=/dev/`echo "$1"|tr -d "0-9"`
+	part=`echo "$1"|tr -d "a-z"`
 
 	#finish install openthos EFI partition
 	dialog --infobox "\n Syncing to disk..." 5 27
@@ -376,7 +377,7 @@ boto_data_install_to()
 	CMD="$CMD DATA_HD_UUID=$UUID DATA_IMG=openthos/data.img\""
 	echo "\"OpenThos\"" \"$CMD\" > $grubcfg
 	echo "\"OpenThos DEBUG\"" \"$CMD DEBUG=1\" >> $grubcfg
-	efibootmgr -c -d $bootdisk -L OpenThos -l /efi/boto/bootx64.efi
+	efibootmgr -c -d $bootdisk -p $part -L OpenThos -l /efi/boto/bootx64.efi
 
 	dialog --infobox "\n Syncing data to disk..." 5 30
 	sleep 1
@@ -519,7 +520,7 @@ install_system()
 	CMD="$CMD DATA_HD_UUID=$UUID DATA_IMG=openthos/data.img"
 	echo "\"OpenThos\"" \"$CMD\" > $grubcfg
 	echo "\"OpenThos DEBUG\"" \"$CMD DEBUG=1\" >> $grubcfg
-	efibootmgr -c -d $bootdisk -L OpenThos -l /efi/boto/bootx64.efi
+	efibootmgr -c -d $bootdisk -p 1 -L OpenThos -l /efi/boto/bootx64.efi
 	sync
 }
 earse_all_partition()
