@@ -616,7 +616,7 @@ install_system()
 	CMD="$CMD DATA_HD_UUID=$UUID"
 	echo "\"OpenThos\"" \"$CMD\" > $grubcfg
 	echo "\"OpenThos DEBUG\"" \"$CMD DEBUG=1\" >> $grubcfg
-	efibootmgr -c -d $bootdisk -p 2 -L OpenThos -l /efi/boto/bootx64.efi
+	efibootmgr -c -d $bootdisk -p 1 -L OpenThos -l /efi/boto/bootx64.efi
 	sync
 }
 earse_all_partition()
