@@ -374,7 +374,7 @@ boto_data_install_to()
 	cd /
 
 	UUID=`blkid /dev/$1|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
-	CMD="$CMD DATA_HD_UUID=$UUID DATA_IMG=openthos/data.img\""
+	CMD="$CMD DATA_HD_UUID=$UUID DATA_IMG=openthos/data.img"
 	echo "\"OpenThos\"" \"$CMD\" > $grubcfg
 	echo "\"OpenThos DEBUG\"" \"$CMD DEBUG=1\" >> $grubcfg
 	efibootmgr -c -d $bootdisk -p $part -L OpenThos -l /efi/boto/bootx64.efi
