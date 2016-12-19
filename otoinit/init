@@ -513,6 +513,12 @@ if [ 0$DEBUG -gt 0 ]; then
 	debug_shell debug-found
 fi
 
+get_param_from_bootargs RECOVERY
+if [ "$RECOVERY" = "1" ];then
+	rm -rf /android/data/*
+fi
+
+
 # load scripts
 
 echo Load Scripts.....
