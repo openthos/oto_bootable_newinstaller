@@ -30,7 +30,9 @@ $(shell echo "" >>$(PRODUCT_OUT)/system/ReleaseNote.txt)
 $(shell echo "OpenThos is modern desktop OS based on android" >>$(PRODUCT_OUT)/system/ReleaseNote.txt)
 $(shell echo "Rleased by: Tsinghua University" >>$(PRODUCT_OUT)/system/ReleaseNote.txt)
 $(shell echo "Build Date:`date`" >>$(PRODUCT_OUT)/system/ReleaseNote.txt)
-$(shell echo "version:1.8.7" > $(PRODUCT_OUT)/system/version)
+$(shell echo "version:"`curl -sf -L http://dev.openthos.org/openthos/oto_ota.ver|\
+	awk -F "=" '{if(NR==1){gsub("\\.","",$$2);ver=$$2+1;print int(ver/100)"."ver%100/10"."ver%100%10}}'`\
+	 > $(PRODUCT_OUT)/system/version)
 $(shell echo -n "date:" >> $(PRODUCT_OUT)/system/version)
 $(shell date "+%Y.%m.%d" >> $(PRODUCT_OUT)/system/version)
 
@@ -150,7 +152,7 @@ OTO_IMAGE := $(PRODUCT_OUT)/$(TARGET_PRODUCT)_oto.img
 ESP_LAYOUT := $(LOCAL_PATH)/editdisklbl/esp_layout.conf
 $(OTO_IMAGE): $(wildcard $(LOCAL_PATH)/boot/efi/*/*) $(OTO_BUILT_IMG) $(DATA_IMG) $(ESP_LAYOUT) | $(edit_mbr)
 	$(shell if [ ! -d  $(@D)/OpenThos ];then mkdir $(@D)/OpenThos;fi)
-	@tar jcvf $(REFIND) -C $(<D)/../../../install/refind efi
+	@tar jcf $(REFIND) -C $(<D)/../../../install/refind efi
 	@mv $(REFIND) $(PRODUCT_OUT)/OpenThos/
 	@cp $(<D)/../../../install/refind/boto_linux.conf $(PRODUCT_OUT)/OpenThos/
 	$(shell cp $(OTO_BUILT_IMG) $(DATA_IMG) $(PRODUCT_OUT)/OpenThos/ -f)
