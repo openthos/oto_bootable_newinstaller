@@ -303,6 +303,7 @@ openthos_update()
       if [ -d /mnt/data/dalvik-cache ]; then
         rm -rf /mnt/data/dalvik-cache/*
       fi
+	rm -rf /mnt/data/media/0/System_Os/*
       ;;
     *)
       echo openthos_update: No update to be done.
