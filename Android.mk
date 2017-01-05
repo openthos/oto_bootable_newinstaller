@@ -31,7 +31,7 @@ $(shell echo "OpenThos is modern desktop OS based on android" >>$(PRODUCT_OUT)/s
 $(shell echo "Rleased by: Tsinghua University" >>$(PRODUCT_OUT)/system/ReleaseNote.txt)
 $(shell echo "Build Date:`date`" >>$(PRODUCT_OUT)/system/ReleaseNote.txt)
 $(shell echo "version:"`curl -sf -L http://dev.openthos.org/openthos/oto_ota.ver|\
-	awk -F "=" '{if(NR==1){gsub("\\.","",$$2);ver=$$2+1;print int(ver/100)"."ver%100/10"."ver%100%10}}'`\
+	awk -F "=" '{if(NR==1){gsub("\\.","",$$2);ver=$$2+1;print int(ver/100)"."int(ver%100/10)"."ver%100%10}}'`\
 	 > $(PRODUCT_OUT)/system/version)
 $(shell echo -n "date:" >> $(PRODUCT_OUT)/system/version)
 $(shell date "+%Y.%m.%d" >> $(PRODUCT_OUT)/system/version)
