@@ -102,7 +102,7 @@ INSTALL_RAMDISK := $(PRODUCT_OUT)/install.img
 $(INSTALL_RAMDISK): $(if $(TARGET_PREBUILT_KERNEL),$(TARGET_PREBUILT_KERNEL),$(PRODUCT_OUT)/kernel)
 $(INSTALL_RAMDISK): $(wildcard $(LOCAL_PATH)/install/*/* $(LOCAL_PATH)/install/*/*/*/* $(LOCAL_PATH)/otoinit/install_scripts/*) | $(MKBOOTFS)
 	$(if $(TARGET_INSTALL_SCRIPTS),$(ACP) -p $(TARGET_INSTALL_SCRIPTS) $(TARGET_INSTALLER_OUT)/scripts)
-	$(hide) mkdir -p $(@D)/modules/bin && ln -f `find $(@D)/obj/kernel -name atkbd.ko -o -name efivars.ko` $(@D)/modules/bin
+	$(hide) mkdir -p $(@D)/modules/bin && ln -f `find $(@D)/obj/kernel -name atkbd.ko -o -name efivarfs.ko` $(@D)/modules/bin
 	$(MKBOOTFS) $(dir $(dir $(<D))) $(@D)/modules | gzip -9 > $@
 
 DATA_IMG := $(PRODUCT_OUT)/data.img
