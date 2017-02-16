@@ -367,16 +367,46 @@ echo "mount -o loop $varImg $sfsMountPoint"
     done
 
     if [ $i -eq 20 ]; then
-      echo "Install meida should have label \"OTO_INSTDSK\", please make sure it's right" 
+      echo "Install meida should have label \"OTO_INSTDSK\", please make sure it's right"
       return 1
     fi
-    
+
     prepare_mountpoint $1
     mount -t vfat LABEL="OTO_INSTDSK" $1
     return 0
   }
+  # End: Function definition
+  # ------------------------------------------------------------------------------
+
+  #----------------------------------
+  # by: David Chan (chanuei@sina.com)
+  # date: 2017-02-15
+  #
+  # Func: mount_eval_media
+  mount_eval_media()
+  {
+    local i=0
+    while [ $i -lt 20 ]; do
+      sleep 1s
+      blkid | grep "OTO_EVALDSK"
+      if [ $? -eq 0 ]; then
+        break
+      fi
+      let ++i
+    done
+
+    if [ $i -eq 20 ]; then
+      echo "Install meida should have label \"OTO_EVALDSK\", please make sure it's right"
+      return 1
+    fi
+
+    prepare_mountpoint $1
+    mount -t vfat LABEL="OTO_EVALDSK" $1
+    return 0
+  }
 # End: Function definition
 # ------------------------------------------------------------------------------
+
 
 # Begin: base init
 # ==============================================================================
@@ -435,6 +465,30 @@ echo "mount -o loop $varImg $sfsMountPoint"
     mount -t tmpfs -o size=512M tmpfs $ANDROID_DIR/data
     ;;
     
+  evalboot)
+    echo "base init: will boot OpenThos in evaluation mode."
+    mount_eval_media $LIVEMEDIA_DIR
+
+    pushd $ANDROID_DIR
+    zcat $LIVEMEDIA_DIR/OpenThos/ramdisk.img | cpio -id  # > /dev/null
+    if [ -e "$LIVEMEDIA_DIR/OpenThos/system.img" ]; then
+      prepare_mountpoint $ANDROID_DIR/system
+      mount -o loop,ro $LIVEMEDIA_DIR/OpenThos/system.img system
+    elif [ -e  "$LIVEMEDIA_DIR/OpenThos/system.sfs" ]; then
+      prepare_mountpoint /mnt/system.sfs
+      mount -o loop $LIVEMEDIA_DIR/OpenThos/system.sfs /mnt/system.sfs
+      prepare_mountpoint $ANDROID_DIR/system
+      mount -o loop /mnt/system.sfs/system.img system
+    else
+      :
+    fi
+
+    mount -o loop $LIVEMEDIA_DIR/OpenThos/data.img data
+
+    popd
+
+    ;;
+
   hdimgboot)
     source /scripts/oto_update.sh
     openthos_update
