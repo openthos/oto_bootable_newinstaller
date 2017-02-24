@@ -197,7 +197,140 @@ fi
     echo "get_param_from_bootargs: No value for $1 found"
     return $VALUE_MISS        
   }
-  
+
+#----------------------------------
+# by: Luoyuan Xiao (xiaoluoyuan@163.com)
+# date: 2017-02-23
+#
+# Func: to_byte
+# Param:
+#   $1, size,eg:22kb,188MB
+to_byte()
+{
+        local s=$1
+        local size="${s%%[a-zA-Z.]*}"
+        local unit="${s##*[0-9]}"
+
+        [ "$size" = "$s" ] && {
+                echo "$s"
+                return
+        }   
+
+        case $unit in
+                PB|pb|Pb|pB|P|p)
+                        echo $((size << 50))
+                        ;;  
+                TB|tb|Tb|tB|T|t)
+                        echo $((size << 40))
+                        ;;
+                GB|gb|Gb|gB|G|g)
+                        echo $((size << 30))
+                        ;;
+                MB|mb|Mb|mB|M|m)
+                        echo $((size << 20))
+                        ;;  
+                KB|kb|Kb|kB|K|k)
+                        echo $((size << 10))
+                        ;;
+                B|b)
+                        echo $size
+                        ;;
+        esac
+}
+
+#----------------------------------
+# by: Luoyuan Xiao (xiaoluoyuan@163.com)
+# date: 2017-02-23
+#
+# Func: to_kb, to_mb, to_gb
+# Param:
+#   $1, size,eg:22kb,188MB
+to_kb()
+{
+        local bytes
+        bytes=$(to_byte "$1")
+        echo $((bytes >> 10))
+}
+
+to_mb()
+{
+        local bytes
+        bytes=$(to_byte "$1")
+        echo $((bytes >> 20))
+}
+
+to_gb()
+{
+        local bytes
+        bytes=$(to_byte "$1")
+        echo $((bytes >> 30))
+}
+
+
+#----------------------------------
+# by: Luoyuan Xiao (xiaoluoyuan@163.com)
+# date: 2017-02-23
+#
+# Func: parted_disk_remaining_space
+# Param:
+#   $1, disk device, default currect disk. eg:/dev/sdc.
+#   $2, fs type, default "ext2". if do not formatted, set "no_fs".
+#   $3, return the remaining partition
+
+parted_disk_remaining_space()
+{
+
+	local cur_disk=$1
+	local fs_type=$2
+
+	if [[ $cur_disk ]];then
+		if [ ${#cur_disk} -gt 8 ];then
+			echo "parted_disk_remaining_space: parameter error, it should be a disk, eg:/dev/sdc"
+      			return $ERROR_PARMETER
+		fi
+	else
+		cur_disk=`cat /proc/mounts | awk '/\/mnt\/livemedia/ {print $1}' | cut -c -8 `
+
+	fi
+
+	[[ $fs_type ]] || fs_type="ext2"
+
+	eval `/bin/parted $cur_disk print free | awk '/Free Space/ {printf("start=%s;end=%s;size=%s;",$1,$2,$3)}'`
+
+	#disk remaining space shoule > 500M
+	if [ $(to_mb $size) -lt 500 ];then
+		echo "parted_disk_remaining_space: $cur_disk have not enough disk remaining space."
+      		return $ERROR_PARMETER
+	fi
+
+	#formatting the disk
+	if [ "$fs_type"x = "no_fs"x ];then
+		echo "The remaining partition of $cur_disk : $size"
+		/bin/parted $cur_disk mkpart primary $start $end
+	else
+		echo -e "Formatting the remaining partition of $cur_disk \n$fs_type $size"
+		/bin/parted $cur_disk mkpartfs primary $fs_type $start $end
+	fi
+
+	if [ $? -ne 0 ]; then
+		echo "parted_disk_remaining_space: parted $cur_disk $fs_type error."
+      		return $ERROR_PARMETER
+	fi
+	sleep 1
+
+	eval `/bin/parted $cur_disk print free | awk '/primary / {printf("partname=%s;",$1)}'`
+	partname=$cur_disk$partname
+
+	echo "_PART_NAME: $partname"
+	if [[ $3 ]];then
+		eval $3=$partname
+	else
+		eval _PART_NAME=$partname
+	fi
+	sync
+
+}
+
   #----------------------------------
   # by: David Chan (chanuei@sina.com)
   # date: 2016-08-31
@@ -460,9 +593,33 @@ echo "mount -o loop $varImg $sfsMountPoint"
       :
     fi
     popd
-    
+
     prepare_mountpoint $ANDROID_DIR/data
-    mount -t tmpfs -o size=512M tmpfs $ANDROID_DIR/data
+
+    get_param_from_bootargs DATA_HD_UUID
+
+	if [ -n "$DATA_HD_UUID" ];then
+	    mount_part_via_uuid $DATA_HD_UUID $ANDROID_DIR/data
+
+	    echo "Found the data partition: $DATA_HD_UUID"
+	    #mount -t ext2 $DATA_PART $ANDROID_DIR/data
+	else
+	    DATA_PART=""
+	    #parted and format the usb remaining space
+	    parted_disk_remaining_space "" "" DATA_PART
+	    if [ -b "$DATA_PART" ]; then
+		echo "Evaluation mode success: $DATA_PART"
+		eval `blkid $DATA_PART|awk '{print $2}'`
+		data_uuid="DATA_HD_UUID=$UUID"
+		sed -i "1 s/\"$/ $data_uuid\"/" $LIVEMEDIA_DIR/OpenThos/boto_linux.conf
+
+		mount -t ext2 $DATA_PART $ANDROID_DIR/data
+	    else
+		echo "Evaluation mode failed."
+		mount -t tmpfs -o size=512M tmpfs $ANDROID_DIR/data
+	    fi
+
+	fi
     ;;
     
   evalboot)
@@ -618,3 +775,4 @@ exec ${SWITCH:-switch_root} /android /init
 while :; do
   debug_shell fatal-err
 done
+
