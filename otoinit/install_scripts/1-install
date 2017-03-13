@@ -271,7 +271,7 @@ create_boto_img()
 	dialog --title " Question " --nook --nocancel --inputbox \
 		"\nPlease input the size of the $bname in GB (max 100):" 8 63 $1 2> $tempfile
 	size=`cat $tempfile`
-	[ 0$size -le 0 -o 0$size -gt 100 ] && size=100
+	#[ 0$size -le 0 -o 0$size -gt 100 ] && size=100
 	size=`expr $size \* 1024`
 	dd if=/dev/zero of=$2 bs=1 count=0 seek=$size"M"
 	#( dd bs=1M count=$size if=/dev/zero | pv -ns ${size}m | dd of=$2 ) 2>&1 \
@@ -515,11 +515,6 @@ n
 8300
 n
 3
-
-+10G
-8300
-n
-4
 
 
 8300

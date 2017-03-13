@@ -474,11 +474,6 @@ n
 n
 2
 
-+100G
-8300
-n
-3
-
 
 8300
 w
@@ -513,7 +508,8 @@ install_system()
 
 	sync;sync;sync
 	mkdir $MOUNT/openthos
-	dd if=/dev/zero of=$MOUNT/openthos/data.img bs=1 count=0 seek=50G
+	freeSize=`df "$MOUNT"|awk 'NR==2{print $4}'`
+	dd if=/dev/zero of=$MOUNT/openthos/data.img bs=1 count=0 seek="$freeSize"k
 	losetup /dev/loop6 $MOUNT/openthos/data.img
 	mke2fs -F -t ext4 -L data /dev/loop6 > /dev/tty6
 	UUID=`blkid "$1"2|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
