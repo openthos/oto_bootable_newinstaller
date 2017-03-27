@@ -312,13 +312,20 @@ parted_disk_remaining_space()
 	fi
 	sync
 
+	partname=""
+
+	while [ -z "$partname" ]
+	do
+	sleep 1
 	eval `/bin/parted $cur_disk print free | awk '/primary/ {printf("partname=%s;",$1)}'`
+	done
+
 	partname=$cur_disk$partname
 	#echo "_PART_NAME: $partname"
 
 	if [ "$fs_type"x != "no_fs"x ];then
 	echo -e "Formatting the remaining partition of $partname \n$fs_type $size"
-	/bin/mke2fs -FF -t $fs_type $partname -L OTO_DATA
+	/bin/mke2fs -F -t $fs_type $partname -L OTO_DATA
 	fi
 
 	if [[ $3 ]];then
@@ -609,9 +616,10 @@ echo "mount -o loop $varImg $sfsMountPoint"
 	    parted_disk_remaining_space "" "" DATA_PART DATA_FS
 	    if [ -b "$DATA_PART" ]; then
 		echo "Evaluation mode success: $DATA_PART"
-		eval `blkid $DATA_PART|awk '{print $2}'`
+		eval `blkid $DATA_PART|awk '{print $2"; "$3}'`
 		data_uuid="DATA_HD_UUID=$UUID"
 		sed -i "1 s/\"$/ $data_uuid\"/" $LIVEMEDIA_DIR/OpenThos/boto_linux.conf
+		sync
 
 		mount -t $DATA_FS $DATA_PART $ANDROID_DIR/data
 	    else
