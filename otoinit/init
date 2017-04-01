@@ -6,79 +6,65 @@
 # update by David Chan<chanuei@sina.com> on 2016-8-25
 # License:GPL V2 
 
-#  CMDLINE=/tmp/cmdline
-  CMDLINE=/proc/cmdline
-if [ -n "$DEBUG" ];then
-	set -x
-	exec 2>>/tmp/log
-fi  
-#  echo "BOOT_MODE=hdimgboot" >$CMDLINE
-#  echo "RAMDISK_HD_UUID=fe2be1f5-50e0-4bdd-bf33-53dd0ffba119" >>$CMDLINE
-#  echo "RAMDISK_IMG=OpenThos/ramdisk.img" >>$CMDLINE
-#  echo "SYSTEM_HD_UUID=fe2be1f5-50e0-4bdd-bf33-53dd0ffba119" >>$CMDLINE
-#  echo "SYSTEM_IMG=OpenThos/system.sfs" >>$CMDLINE
-#  echo "DATA_HD_UUID=fe2be1f5-50e0-4bdd-bf33-53dd0ffba119" >>$CMDLINE
-#  echo "DATA_IMG=OpenThos/data.img" >>$CMDLINE
+CMDLINE=/proc/cmdline
+#if [ -n "$DEBUG" ];then
+#  set -x
+#  exec 2>>/tmp/log
+#fi
 
+#echo "Init Script Enter..."
 
 debug_shell()
 {
-	pushd
-	if [ -e system/bin/sh ] && [ -x system/bin/sh ]; then
-		echo Running MirBSD Korn Shell...
-		USER="($1)" system/bin/sh -l 2>&1
-	else
-		echo Running busybox ash...
-		sh 2>&1
-	fi
-	popd
+  pushd
+
+  if [ -e system/bin/sh ] && [ -x system/bin/sh ]; then
+    echo Running MirBSD Korn Shell...
+    USER="($1)" system/bin/sh -l 2>&1
+  else
+    echo Running busybox ash...
+    sh 2>&1
+  fi
+
+  popd
 }
 
-  echo "Init Script Enter..."
-  
 # Begin: Early init
 # ==============================================================================  
-  echo ""
-  echo "Stage early init start..."
+#  echo ""
+#  echo "Stage early init start..."
   readonly ANDROID_DIR="/android"
   readonly LIVEMEDIA_DIR="/mnt/livemedia"
   
   PATH=/sbin:/bin:/system/bin:/system/xbin; export PATH
 
-if [ ! "$HAS_CTTY" = "YES" ]; then
+  if [ ! "$HAS_CTTY" = "YES" ]; then
+#    echo "Early Init: Busybox installing..."
+    busybox mount -t proc proc /proc
+    busybox mount -t sysfs sysfs /sys
+    busybox mount -t tmpfs tmpfs /android
+    busybox mount -t tmpfs tmpfs /tmp
+    busybox --install -s
 
+    rm -f /sbin/mke2fs
+    rm -f /sbin/mkfs*
+#    echo "Early Init: Busybox installed."
+
+    mknod /dev/tty c 5 0
+    mknod /dev/tty2 c 4 2 && openvt
+    mknod /dev/tty3 c 4 3 && openvt
   
-  echo "Early Init: Busybox installing..."
-  busybox mount -t proc proc /proc
-  busybox mount -t sysfs sysfs /sys
-
-  busybox mount -t tmpfs tmpfs /android
-
-  busybox mount -t tmpfs tmpfs /tmp
-  busybox --install -s
-  rm -f /sbin/mke2fs
-  rm -f /sbin/mkfs*
-  echo "Early Init: Busybox installed."
-
-  mknod /dev/tty c 5 0
-  mknod /dev/console c 5 1
-  mknod /dev/tty2 c 4 2 && openvt
-  mknod /dev/tty3 c 4 3 && openvt
-#  ::respawn:/sbin/getty 38400 tty1
-#  ::respawn:/sbin/getty 38400 tty2
-#  ::respawn:/sbin/getty 38400 tty3  
+    mkdir -p /dev/block
+#    echo "Early Init: Devices enumerating..."
+    echo /sbin/mdev > /proc/sys/kernel/hotplug
+    mdev -s
+    echo 3 4 1 2 > /proc/sys/kernel/printk
+#    echo "Early Init: Devices enumerated."
+    exec env HAS_CTTY=YES setsid cttyhack /bin/sh "$0" "$@"
   
-  mkdir -p /dev/block
-  echo "Early Init: Devices enumerating..."
-  echo /sbin/mdev > /proc/sys/kernel/hotplug
-  mdev -s
-
-  echo "Early Init: Devices enumerated."
-exec env HAS_CTTY=YES setsid cttyhack /bin/sh "$0" "$@"
+  fi
   
-fi
-  
-  echo "Stage early init finished."
+#  echo "Stage early init finished."
   
 # End: Early init
 # ------------------------------------------------------------------------------
@@ -87,6 +73,28 @@ fi
 # Begin: Function definition
 # ==============================================================================  
  
+  dbg_echo()
+  {
+    cat $CMDLINE | grep "DEBUG" >> /dev/null
+
+    if [ $? -ne 0 ]; then
+      echo $1 >> /dev/null
+    else
+      echo $1
+    fi
+  }
+
+  dbg_printf()
+  {
+    cat $CMDLINE | grep "DEBUG" >> /dev/null
+
+    if [ $? -ne 0 ]; then
+      printf $1 >> /dev/null
+    else
+      printf $1
+    fi
+  }
+
   #----------------------------------
   # by: David Chan (chanuei@sina.com)
   # date: 2016-08-27
@@ -94,17 +102,17 @@ fi
   # Func: dirs  
   dirs()
   {
-    printf "_DIRSTACK: $PWD  "
+    dbg_printf "_DIRSTACK: $PWD  "
     
     local OLDIFS="$IFS"
     IFS=":"
   
     for i in $_DIRSTACK
     do
-      printf "$i  "
+      dbg_printf "$i  "
     done
     
-    printf "\n"
+    dbg_printf "\n"
     
     IFS="$OLDIFS"
   }
@@ -121,7 +129,7 @@ fi
     local REQ="$1"
     REQ="${REQ:-.}"
     if [ ! -d $REQ ]; then
-      echo "PUSHD Failed: You've tried to pushd a non-directory $REQ."
+      dbg_echo "PUSHD Failed: You've tried to pushd a non-directory $REQ."
       return 1
     fi
     
@@ -132,7 +140,7 @@ fi
       dirs
       return 0
     else
-      echo "PUSHD Failed: Cannot chang to directory $REQ."
+      dbg_echo "PUSHD Failed: Cannot chang to directory $REQ."
       return 1
     fi
   }
@@ -145,22 +153,19 @@ fi
   # Param:
   popd()
   {
-#    _DIRSTACK=$_DIRSTACK
-    
     if [ -z "$_DIRSTACK" ]; then
-        echo "POPD: Directory stack is empty."
+        dbg_echo "POPD: Directory stack is empty."
         return 1
     fi
     
     if cd `echo $_DIRSTACK | cut -d: -f1`; then
-#      _DIRSTACK=`echo $_DIRSTACK | cut -d: -f1 --complement`
       local semiPos=`expr index $_DIRSTACK ":"`
       let semiPos=$semiPos+1
       _DIRSTACK=`echo $_DIRSTACK | cut -b$semiPos-`
       dirs
       return 0
     else
-      echo "POPD: change directory failed !"
+      dbg_echo "POPD: change directory failed !"
       return 1
     fi
   }
@@ -176,7 +181,7 @@ fi
   get_param_from_bootargs()
   {
     if [ "$#" -ne 1 ]; then
-      echo "get_param_from_bootargs: The func should be called with 1 parameters, but $# parameters found"
+      dbg_echo "get_param_from_bootargs: The func should be called with 1 parameters, but $# parameters found"
       return $ERROR_PARMETER
     fi
     
@@ -194,150 +199,146 @@ fi
       esac
     done
     
-    echo "get_param_from_bootargs: No value for $1 found"
+    dbg_echo "get_param_from_bootargs: No value for $1 found"
     return $VALUE_MISS        
   }
 
-#----------------------------------
-# by: Luoyuan Xiao (xiaoluoyuan@163.com)
-# date: 2017-02-23
-#
-# Func: to_byte
-# Param:
-#   $1, size,eg:22kb,188MB
-to_byte()
-{
-        local s=$1
-        local size="${s%%[a-zA-Z.]*}"
-        local unit="${s##*[0-9]}"
+  #----------------------------------
+  # by: Luoyuan Xiao (xiaoluoyuan@163.com)
+  # date: 2017-02-23
+  #
+  # Func: to_byte
+  # Param:
+  #   $1, size,eg:22kb,188MB
+  to_byte()
+  {
+    local s=$1
+    local size="${s%%[a-zA-Z.]*}"
+    local unit="${s##*[0-9]}"
 
-        [ "$size" = "$s" ] && {
-                echo "$s"
-                return
-        }   
+    [ "$size" = "$s" ] && {
+      echo "$s"
+      return
+    }
 
-        case $unit in
-                PB|pb|Pb|pB|P|p)
-                        echo $((size << 50))
-                        ;;  
-                TB|tb|Tb|tB|T|t)
-                        echo $((size << 40))
-                        ;;
-                GB|gb|Gb|gB|G|g)
-                        echo $((size << 30))
-                        ;;
-                MB|mb|Mb|mB|M|m)
-                        echo $((size << 20))
-                        ;;  
-                KB|kb|Kb|kB|K|k)
-                        echo $((size << 10))
-                        ;;
-                B|b)
-                        echo $size
-                        ;;
+    case $unit in
+        PB|pb|Pb|pB|P|p)
+        echo $((size << 50))
+                    ;;
+	TB|tb|Tb|tB|T|t)
+		echo $((size << 40))
+		;;
+	GB|gb|Gb|gB|G|g)
+		echo $((size << 30))
+		;;
+	MB|mb|Mb|mB|M|m)
+		echo $((size << 20))
+		;;
+	KB|kb|Kb|kB|K|k)
+		echo $((size << 10))
+		;;
+	B|b)
+		echo $size
+		;;
         esac
-}
+  }
 
-#----------------------------------
-# by: Luoyuan Xiao (xiaoluoyuan@163.com)
-# date: 2017-02-23
-#
-# Func: to_kb, to_mb, to_gb
-# Param:
-#   $1, size,eg:22kb,188MB
-to_kb()
-{
-        local bytes
-        bytes=$(to_byte "$1")
-        echo $((bytes >> 10))
-}
+  #----------------------------------
+  # by: Luoyuan Xiao (xiaoluoyuan@163.com)
+  # date: 2017-02-23
+  #
+  # Func: to_kb, to_mb, to_gb
+  # Param:
+  #   $1, size,eg:22kb,188MB
+  to_kb()
+  {
+    local bytes
+    bytes=$(to_byte "$1")
+    echo $((bytes >> 10))
+  }
 
-to_mb()
-{
-        local bytes
-        bytes=$(to_byte "$1")
-        echo $((bytes >> 20))
-}
+  to_mb()
+  {
+    local bytes
+    bytes=$(to_byte "$1")
+    echo $((bytes >> 20))
+  }
 
-to_gb()
-{
-        local bytes
-        bytes=$(to_byte "$1")
-        echo $((bytes >> 30))
-}
+  to_gb()
+  {
+    local bytes
+    bytes=$(to_byte "$1")
+    echo $((bytes >> 30))
+  }
 
 
-#----------------------------------
-# by: Luoyuan Xiao (xiaoluoyuan@163.com)
-# date: 2017-02-23
-#
-# Func: parted_disk_remaining_space
-# Param:
-#   $1, disk device, default currect disk. eg:/dev/sdc.
-#   $2, fs type, default "ext4". if do not formatted, set "no_fs".
-#   $3, return the remaining partition
-#   $4, return fs type
+  #----------------------------------
+  # by: Luoyuan Xiao (xiaoluoyuan@163.com)
+  # date: 2017-02-23
+  #
+  # Func: parted_disk_remaining_space
+  # Param:
+  #   $1, disk device, default currect disk. eg:/dev/sdc.
+  #   $2, fs type, default "ext4". if do not formatted, set "no_fs".
+  #   $3, return the remaining partition
+  #   $4, return fs type
 
-parted_disk_remaining_space()
-{
+  parted_disk_remaining_space()
+  {
 
-	local cur_disk=$1
-	local fs_type=$2
+    local cur_disk=$1
+    local fs_type=$2
 
-	if [[ $cur_disk ]];then
-		if [ ${#cur_disk} -gt 8 ];then
-			echo "parted_disk_remaining_space: parameter error, it should be a disk, eg:/dev/sdc"
-      			return $ERROR_PARMETER
-		fi
-	else
-		cur_disk=`cat /proc/mounts | awk '/\/mnt\/livemedia/ {print $1}' | cut -c -8 `
+    if [[ $cur_disk ]];then
+      if [ ${#cur_disk} -gt 8 ];then
+        echo "parted_disk_remaining_space: parameter error, it should be a disk, eg:/dev/sdc"
+	  return $ERROR_PARMETER
+      fi
+    else
+      cur_disk=`cat /proc/mounts | awk '/\/mnt\/livemedia/ {print $1}' | cut -c -8 `
+    fi
 
-	fi
+    [[ $fs_type ]] || fs_type="ext4"
 
-	[[ $fs_type ]] || fs_type="ext4"
+    eval `/bin/parted $cur_disk print free | awk '/Free Space/ {printf("start=%s;end=%s;size=%s;",$1,$2,$3)}'`
 
-	eval `/bin/parted $cur_disk print free | awk '/Free Space/ {printf("start=%s;end=%s;size=%s;",$1,$2,$3)}'`
+    #disk remaining space shoule > 500M
+    if [ $(to_mb $size) -lt 500 ];then
+      dbg_echo "parted_disk_remaining_space: $cur_disk have not enough disk remaining space."
+      return $ERROR_PARMETER
+    fi
 
-	#disk remaining space shoule > 500M
-	if [ $(to_mb $size) -lt 500 ];then
-		echo "parted_disk_remaining_space: $cur_disk have not enough disk remaining space."
-      		return $ERROR_PARMETER
-	fi
+    #formatting the disk
+    /bin/parted $cur_disk mkpart primary $start $end >> /dev/null 2&>1
+    if [ $? -ne 0 ]; then
+      echo "parted_disk_remaining_space: parted $cur_disk error."
+      return $ERROR_PARMETER
+    fi
+    sync
 
-	#formatting the disk
-	/bin/parted $cur_disk mkpart primary $start $end
-	if [ $? -ne 0 ]; then
-		echo "parted_disk_remaining_space: parted $cur_disk error."
-      		return $ERROR_PARMETER
-	fi
-	sync
+    partname=""
 
-	partname=""
+    while [ -z "$partname" ]
+    do
+      sleep 1
+      eval `/bin/parted $cur_disk print free | awk '/primary/ {printf("partname=%s;",$1)}'`
+    done
+    partname=$cur_disk$partname
+    #echo "_PART_NAME: $partname"
 
-	while [ -z "$partname" ]
-	do
-	sleep 1
-	eval `/bin/parted $cur_disk print free | awk '/primary/ {printf("partname=%s;",$1)}'`
-	done
+    if [ "$fs_type"x != "no_fs"x ];then
+      dbg_echo -e "Formatting the remaining partition of $partname \n$fs_type $size"
+      /bin/mke2fs -F -t $fs_type $partname -L OTO_DATA >> /dev/null 2>&1
+    fi
 
-	partname=$cur_disk$partname
-	#echo "_PART_NAME: $partname"
-
-	if [ "$fs_type"x != "no_fs"x ];then
-	echo -e "Formatting the remaining partition of $partname \n$fs_type $size"
-	/bin/mke2fs -F -t $fs_type $partname -L OTO_DATA
-	fi
-
-	if [[ $3 ]];then
-		eval $3=$partname
-	else
-		eval _PART_NAME=$partname
-	fi
-		eval $4=$fs_type
-	sync
-
-}
-
+    if [[ $3 ]];then
+      eval $3=$partname
+    else
+      eval _PART_NAME=$partname
+    fi
+    eval $4=$fs_type
+    sync
+  }
   #----------------------------------
   # by: David Chan (chanuei@sina.com)
   # date: 2016-08-31
@@ -349,7 +350,7 @@ parted_disk_remaining_space()
   get_hd_fstype()
   {
     if [ "$#" -ne 2 ]; then
-      echo "GET_HD_FSTYPE: The func should be called with 2 parameters, but $# parameters found"
+      dbg_echo "GET_HD_FSTYPE: The func should be called with 2 parameters, but $# parameters found"
       return $ERROR_PARMETER
     fi
     
@@ -368,7 +369,7 @@ parted_disk_remaining_space()
   mount_part_via_uuid()
   {
     if [ "$#" -ne 3 ] && [ "$#" -ne 2 ]; then
-      echo "mount_part_via_uuid: The func should be called with 2 parameters, but $# parameters found"
+      dbg_echo "mount_part_via_uuid: The func should be called with 2 parameters, but $# parameters found"
       return $ERROR_PARMETER
     fi
     
@@ -380,13 +381,13 @@ parted_disk_remaining_space()
     if [ $?=$PARAM_FOUND ] && [ "$#" -eq 3 ]; then
       local varMountOption="-o $3"
     fi
-echo "fsType for $1 is $fsType"
+    dbg_echo "fsType for $1 is $fsType"
     if [ "$fsType" = "ntfs" ] || [ "$fsType" = "NTFS" ]; then
       hdPart="$(for c in `blkid | grep -m 1 -i $1`; do	echo $c | grep -i "/dev" | cut -d":" -f1; done)"
-echo "mount.ntfs-3g $hdPart $2"
+      dbg_echo "mount.ntfs-3g $hdPart $2"
       mount.ntfs-3g $hdPart $2
     else
-echo "mount -t $fsType $varMountOption UUID=$1 $2"
+      dbg_echo "mount -t $fsType $varMountOption UUID=$1 $2"
       mount -t $fsType $varMountOption UUID=$1 $2
     fi
   }
@@ -405,7 +406,7 @@ echo "mount -t $fsType $varMountOption UUID=$1 $2"
   mount_os_img()
   {
     if [ "$#" -ne 3 ] && [ "$#" -ne 2 ]; then
-      echo "mount_os_img: The func should be called with 2 parameters, but $# parameters found"
+      dbg_echo "mount_os_img: The func should be called with 2 parameters, but $# parameters found"
       return $ERROR_PARMETER
     fi
     
@@ -432,8 +433,8 @@ echo "mount -t $fsType $varMountOption UUID=$1 $2"
       case $1 in
       RAMDISK)
         pushd $ANDROID_DIR
-echo "zcat $varImg | cpio -id #> /dev/null"
-        zcat $varImg | cpio -id 2>&1
+        dbg_echo "zcat $varImg | cpio -id"
+        zcat $varImg | cpio -id >>/dev/null 2>&1
         popd
         ;;
       SYSTEM | DATA)
@@ -447,18 +448,18 @@ echo "zcat $varImg | cpio -id #> /dev/null"
               umount  $sfsMountPoint
             fi
           fi
-echo "mount -o loop $varImg $sfsMountPoint"
+          dbg_echo "mount -o loop $varImg $sfsMountPoint"
           mount -o loop $varImg $sfsMountPoint
           varImg=$sfsMountPoint/"$(echo $2 | rev | cut -d/ -f1 | cut -d. -f2 | rev)".img
         elif [ "$(echo $2 | rev | cut -d/ -f1 | cut -d. -f1 | rev)" = "img" ]; then
           :
         else
-          echo "mount_os_img: $2 is not suffixed with \".img\" or \".sfs\""
+          dbg_echo "mount_os_img: $2 is not suffixed with \".img\" or \".sfs\""
           return 1
         fi
         pushd $ANDROID_DIR
         local imgMountPoint="$(echo "$1" | tr '[:upper:]' '[:lower:]')"
-        mount -o loop $varImg $imgMountPoint
+        mount -o loop -t ext4 $varImg $imgMountPoint
         popd
         ;;
       *)
@@ -466,7 +467,7 @@ echo "mount -o loop $varImg $sfsMountPoint"
       esac
 
     else
-      echo /$2 on disk UUID=$varUuid not found
+      dbg_echo /$2 on disk UUID=$varUuid not found
     fi    
   }
   
@@ -499,7 +500,7 @@ echo "mount -o loop $varImg $sfsMountPoint"
     local i=0
     while [ $i -lt 20 ]; do
       sleep 1s
-      blkid | grep "OTO_INSTDSK"
+      blkid | grep "OTO_INSTDSK" >>/dev/null
       if [ $? -eq 0 ]; then
         break
       fi
@@ -507,7 +508,7 @@ echo "mount -o loop $varImg $sfsMountPoint"
     done
 
     if [ $i -eq 20 ]; then
-      echo "Install meida should have label \"OTO_INSTDSK\", please make sure it's right"
+      dbg_echo "Install meida should have label \"OTO_INSTDSK\", please make sure it's right"
       return 1
     fi
 
@@ -536,7 +537,7 @@ echo "mount -o loop $varImg $sfsMountPoint"
     done
 
     if [ $i -eq 20 ]; then
-      echo "Install meida should have label \"OTO_EVALDSK\", please make sure it's right"
+      dbg_echo "Evaluation meida should have label \"OTO_EVALDSK\", please make sure it's right"
       return 1
     fi
 
@@ -547,24 +548,21 @@ echo "mount -o loop $varImg $sfsMountPoint"
 # End: Function definition
 # ------------------------------------------------------------------------------
 
-
 # Begin: base init
 # ==============================================================================
-  echo "Stage init start..."
+  dbg_echo "Stage init start..."
   
-  echo "base init: boot mode detecting ..."
+  dbg_echo "base init: boot mode detecting ..."
   get_param_from_bootargs BOOT_MODE
-  echo "              BOOT_MODE is $BOOT_MODE"
+  dbg_echo "              BOOT_MODE is $BOOT_MODE"
   
   case $BOOT_MODE in
   install)
-    echo "base init: will boot OpenThos in install mode"
+    dbg_echo "base init: will boot OpenThos in install mode"
     mount_live_media $LIVEMEDIA_DIR
-    zcat $LIVEMEDIA_DIR/OpenThos/install.img | cpio -id  # > /dev/null
+    zcat $LIVEMEDIA_DIR/OpenThos/install.img | cpio -id  >/dev/null 2>&1
     insmod bin/atkbd.ko
-    #for s in `ls /scripts/*`; do
-#	test -e "$s" && source $s
- #   done
+
     ln -s /bin/mke2fs /bin/make_ext4fs
     ln -s /bin/mkfs.fat /bin/mkdosfs
     ln -s /bin/ntfs-3g /bin/mount.ntfs-3g
@@ -583,59 +581,59 @@ echo "mount -o loop $varImg $sfsMountPoint"
     ;;
     
   liveboot)
-    echo "base init: will boot OpenThos in live mode."
+    dbg_echo "base init: will boot OpenThos in live mode."
     mount_live_media $LIVEMEDIA_DIR
     
     pushd $ANDROID_DIR
-    zcat $LIVEMEDIA_DIR/OpenThos/ramdisk.img | cpio -id  # > /dev/null
+    zcat $LIVEMEDIA_DIR/OpenThos/ramdisk.img | cpio -id  >/dev/null 2>&1
     if [ -e "$LIVEMEDIA_DIR/OpenThos/system.img" ]; then
       prepare_mountpoint $ANDROID_DIR/system
-      mount -o loop,ro $LIVEMEDIA_DIR/OpenThos/system.img system
+      mount -t ext4 -o loop,ro $LIVEMEDIA_DIR/OpenThos/system.img system
     elif [ -e  "$LIVEMEDIA_DIR/OpenThos/system.sfs" ]; then
       prepare_mountpoint /mnt/system.sfs
       mount -o loop $LIVEMEDIA_DIR/OpenThos/system.sfs /mnt/system.sfs
       prepare_mountpoint $ANDROID_DIR/system
-      mount -o loop /mnt/system.sfs/system.img system
+      mount -t ext4 -o loop /mnt/system.sfs/system.img system
     else
       :
     fi
+
+    mount -t tmpfs -o size=512M tmpfs data
+
     popd
 
     prepare_mountpoint $ANDROID_DIR/data
 
     get_param_from_bootargs DATA_HD_UUID
 
-	if [ -n "$DATA_HD_UUID" ];then
-	    mount_part_via_uuid $DATA_HD_UUID $ANDROID_DIR/data
-
-	    echo "Found the data partition: $DATA_HD_UUID"
-	    #mount -t ext2 $DATA_PART $ANDROID_DIR/data
+    if [ -n "$DATA_HD_UUID" ];then
+      mount_part_via_uuid $DATA_HD_UUID $ANDROID_DIR/data
+      dbg_echo "Found the data partition: $DATA_HD_UUID"
+      else
+	DATA_PART=""
+	#parted and format the usb remaining space
+	parted_disk_remaining_space "" "" DATA_PART DATA_FS
+	if [ -b "$DATA_PART" ]; then
+          dbg_echo "Evaluation mode success: $DATA_PART"
+	  DATA_UUID=`blkid "$DATA_PART"|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
+          data_uuid="DATA_HD_UUID=$DATA_UUID"
+          sed -i "1 s/\"$/ $data_uuid\"/" $LIVEMEDIA_DIR/OpenThos/boto_linux.conf
+          sync
+	  mount -t $DATA_FS $DATA_PART $ANDROID_DIR/data
 	else
-	    DATA_PART=""
-	    #parted and format the usb remaining space
-	    parted_disk_remaining_space "" "" DATA_PART DATA_FS
-	    if [ -b "$DATA_PART" ]; then
-		echo "Evaluation mode success: $DATA_PART"
-		eval `blkid $DATA_PART|awk '{print $2"; "$3}'`
-		data_uuid="DATA_HD_UUID=$UUID"
-		sed -i "1 s/\"$/ $data_uuid\"/" $LIVEMEDIA_DIR/OpenThos/boto_linux.conf
-		sync
-
-		mount -t $DATA_FS $DATA_PART $ANDROID_DIR/data
-	    else
-		echo "Evaluation mode failed."
-		mount -t tmpfs -o size=512M tmpfs $ANDROID_DIR/data
-	    fi
-
+	  dbg_echo "Evaluation mode failed."
+	  mount -t tmpfs -o size=512M tmpfs $ANDROID_DIR/data
 	fi
+
+    fi
     ;;
     
   evalboot)
-    echo "base init: will boot OpenThos in evaluation mode."
+    dbg_echo "base init: will boot OpenThos in evaluation mode."
     mount_eval_media $LIVEMEDIA_DIR
 
     pushd $ANDROID_DIR
-    zcat $LIVEMEDIA_DIR/OpenThos/ramdisk.img | cpio -id  # > /dev/null
+    zcat $LIVEMEDIA_DIR/OpenThos/ramdisk.img | cpio -id  >/dev/null 2>&1
     if [ -e "$LIVEMEDIA_DIR/OpenThos/system.img" ]; then
       prepare_mountpoint $ANDROID_DIR/system
       mount -o loop,ro $LIVEMEDIA_DIR/OpenThos/system.img system
@@ -657,7 +655,7 @@ echo "mount -o loop $varImg $sfsMountPoint"
   hdimgboot)
     source /scripts/oto_update.sh
     openthos_update
-    echo "base init: will boot OpenThos from local disk images."
+    dbg_echo "base init: will boot OpenThos from local disk images."
 
     get_param_from_bootargs RAMDISK_IMG
     mount_os_img RAMDISK $RAMDISK_IMG
@@ -674,7 +672,7 @@ echo "mount -o loop $varImg $sfsMountPoint"
     openthos_update
     pushd $ANDROID_DIR
 
-    echo "base init: will boot OpenThos from local disk partitions."
+    dbg_echo "base init: will boot OpenThos from local disk partitions."
 
     get_param_from_bootargs RAMDISK_IMG
     mount_os_img RAMDISK $RAMDISK_IMG
@@ -682,14 +680,14 @@ echo "mount -o loop $varImg $sfsMountPoint"
     if [ -n "$SYSTEM_HD_UUID" ]; then
       mount_part_via_uuid $SYSTEM_HD_UUID system
     else
-      echo "base init: no SYSTEM_HD_UUID found, will try the default contents"
+      dbg_echo "base init: no SYSTEM_HD_UUID found, will try the default contents"
     fi
     
     get_param_from_bootargs DATA_HD_UUID
     if [ -n "$DATA_HD_UUID" ]; then
       mount_part_via_uuid $DATA_HD_UUID data
     else
-      echo "base init: no DATA_HD_UUID found, will try the default contents"
+      dbg_echo "base init: no DATA_HD_UUID found, will try the default contents"
     fi
         
     popd
@@ -701,18 +699,18 @@ echo "mount -o loop $varImg $sfsMountPoint"
   esac
   
   
-  echo "Stage init finished."
+  dbg_echo "Stage init finished."
 # End: init
 # ------------------------------------------------------------------------------
 
 # Begin: boot android
 # ==============================================================================
-  echo "Stage boot android start..."
+  dbg_echo "Stage boot android start..."
 
   pushd $ANDROID_DIR
 
-    ln -s /android/system /
-    ln -s /system/lib/firmware /system/lib/modules /lib
+  ln -s /android/system /
+  ln -s /system/lib/firmware /system/lib/modules /lib
 
   mv /bin /lib .
   sed -i 's|\( PATH.*\)|\1:/bin|' init.environ.rc
@@ -725,58 +723,58 @@ echo "mount -o loop $varImg $sfsMountPoint"
 # ensure keyboard driver is loaded
   busybox modprobe atkbd
 
-get_param_from_bootargs DEBUG
+  get_param_from_bootargs DEBUG
 
-if [ 0$DEBUG -gt 0 ]; then
-	echo -e "\nType 'exit' to continue booting...\n"
-	debug_shell debug-found
-fi
+  if [ 0$DEBUG -gt 0 ]; then
+    echo -e "\nType 'exit' to continue booting...\n"
+    debug_shell debug-found
+  fi
 
-get_param_from_bootargs RECOVERY
-if [ "$RECOVERY" = "1" ];then
-	rm -rf /android/data/*
-fi
+  get_param_from_bootargs RECOVERY
+  if [ "$RECOVERY" = "1" ];then
+    rm -rf /android/data/*
+  fi
 
 
 # load scripts
 
-echo Load Scripts.....
-for s in `ls /scripts/*`; do
-	test -e "$s" && source $s
-done
+  dbg_echo Load Scripts.....
+  for s in `ls /scripts/*`; do
+    test -e "$s" && source $s
+  done
 
 # Other normal steps
-load_modules
+  load_modules
 #mount_data
-mount_sdcard
-setup_tslib
-setup_dpi
+  mount_sdcard
+  setup_tslib
+  setup_dpi
 #post_detect
 
 
-if [ -e /android/data/rec_reset ]; then
-   rm -rf /android/data/*
-   rm -rf /cache/*
-fi
+  if [ -e /android/data/rec_reset ]; then
+    rm -rf /android/data/*
+    rm -rf /cache/*
+  fi
 
-chmod 777 /android/preinstall.sh
+  chmod 777 /android/preinstall.sh
 
-if [ 0$DEBUG -gt 1 ]; then
-	echo -e "\nUse Alt-F1/F2/F3 to switch between virtual consoles"
-	echo -e "Type 'exit' to enter Android...\n"
+  if [ 0$DEBUG -gt 1 ]; then
+    echo -e "\nUse Alt-F1/F2/F3 to switch between virtual consoles"
+    echo -e "Type 'exit' to enter Android...\n"
 
-	debug_shell debug-late
-fi
-[ -n "$DEBUG" ] && SWITCH=${SWITCH:-chroot}
+    debug_shell debug-late
+  fi
+  [ -n "$DEBUG" ] && SWITCH=${SWITCH:-chroot}
 
 # We must disable mdev before switching to Android
 # since it conflicts with Android's init
-echo > /proc/sys/kernel/hotplug
+  echo > /proc/sys/kernel/hotplug
 
-exec ${SWITCH:-switch_root} /android /init
+  exec ${SWITCH:-switch_root} /android /init
 
   
-  echo "Stage boot android finished."
+  dbg_echo "Stage boot android finished."
 # End: boot android
 # ------------------------------------------------------------------------------
 
