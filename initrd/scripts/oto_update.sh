@@ -25,7 +25,7 @@ load_update_desc()
   elif [ "$varPackFormat" = "iso" ]; then
     :
   else
-    echo load_update_desc: Unsupported update package format with $varPackFormat
+    dbg_printf "load_update_desc: Unsupported update package format with $varPackFormat"
     popd
     return 1
   fi
@@ -79,7 +79,7 @@ replace_img_file()
     :
     retVar=0
   else
-    echo load_update_desc: Unsupported update package format with $varPackFormat
+    dbg_printf "load_update_desc: Unsupported update package format with $varPackFormat"
     retVar=1
   fi
   popd
@@ -100,7 +100,7 @@ do_update()
   
   pushd /mnt
   
-  echo do_update with $1 ...
+  dbg_printf "do_update with $1 ..."
 
   case $1 in
   boto.zip)
@@ -153,7 +153,7 @@ do_update()
         ;;
       esac
     else
-      echo hdimg_replace_file: Fata error, no RAMDISK_HD_UUID found from bootagrs.
+      echo "hdimg_replace_file: Fata error, no RAMDISK_HD_UUID found from bootagrs."
       retVar=1
     fi      
     ;;
@@ -166,7 +166,7 @@ do_update()
       local ramdiskImagePath
       get_param_from_bootargs RAMDISK_IMG
       ramdiskImagePath="$(echo $RAMDISK_IMG | rev | cut -d/ -f2- | rev)"
-      echo ramdiskImagePath=$ramdiskImagePath while RAMDISK_IMG=$RAMDISK_IMG   
+      dbg_printf "ramdiskImagePath=$ramdiskImagePath while RAMDISK_IMG=$RAMDISK_IMG"
       replace_img_file $1 ramdisk/$ramdiskImagePath
       sync;sync;sync
       
@@ -177,16 +177,16 @@ do_update()
       
 #      sleep 1s
       
-      echo will umount ramdisk, now at $PWD
+      dbg_printf "will umount ramdisk, now at $PWD"
       umount ramdisk
     else
-      echo hdimg_replace_file: Fata error, no RAMDISK_HD_UUID found from bootagrs.
+      echo "hdimg_replace_file: Fata error, no RAMDISK_HD_UUID found from bootagrs."
       retVar=1
     fi
     ;;
     
   *)
-    echo hd_update_filesystem: $UPDATE_DESC in the $UPDATE_PACK show me a file $1, but I don\'t know what to do with it.
+    dbg_printf "hd_update_filesystem: $UPDATE_DESC in the $UPDATE_PACK show me a file $1, but I don\'t know what to do with it."
     retVar=1
     ;;
   esac
@@ -203,7 +203,7 @@ do_update()
 # Func: openthos_update_stage2
 openthos_update_stage2()
 {
-  echo Update file found, your os will be updated.
+  dbg_echo "Update file found, your os will be updated."
   mkdir -p $TMP_DIR
   load_update_desc
   if [ $? -ne 0 ]; then
@@ -224,7 +224,7 @@ openthos_update_stage2()
   echo $updateRet >> $UPDATE_INFO
   
   if [ $updateRet -eq 0 ]; then
-    echo openthos_update: Updating process succeeded.
+    dbg_echo "openthos_update: Updating process succeeded."
   else
     echo openthos_update: Updating process failed.
   fi
@@ -237,7 +237,7 @@ openthos_update_stage2()
 # Func: update_detect
 openthos_update()
 {
-  echo oto_update: Checking ...
+  dbg_echo "oto_update: Checking ..."
   
   if [ ! "$BOOT_MODE" = "hdboot" ] && [ ! "$BOOT_MODE" = "hdimgboot" ]; then
   
@@ -267,16 +267,17 @@ openthos_update()
       mount_part_via_uuid $DATA_HD_UUID data
     fi
     
-    
-    UPDATE_PACK="$UPDATE_PACK/$(tac $UPDATE_INFO | sed -n 2p)"
-    
-    echo $UPDATE_PACK
+    if [ -f $UPDATE_INFO ];
+    then
+        UPDATE_PACK="$UPDATE_PACK/$(tac $UPDATE_INFO | sed -n 2p)"
+        dbg_printf "$UPDATE_PACK"
+    fi
 
     update_detect
     
     case $? in
     $UPDATE_MISS)
-      echo openthos_update: It seems that the system should be updated, but no update package found.
+      echo "openthos_update: It seems that the system should be updated, but no update package found."
       ;;
     $UPDATE_SHOULD)
 
@@ -285,7 +286,7 @@ openthos_update()
 
       mount_part_via_uuid $RAMDISK_HD_UUID ramdisk
 
-      echo now is at `pwd`
+      dbg_echo "now is at `pwd`"
       pushd /
       zcat /mnt/ramdisk/OpenThos/install.img | cpio -id
       popd
@@ -306,7 +307,7 @@ openthos_update()
 	rm -rf /mnt/data/media/0/System_Os/*
       ;;
     *)
-      echo openthos_update: No update to be done.
+      dbg_echo "openthos_update: No update to be done."
       ;;
     esac
  
