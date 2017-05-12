@@ -127,14 +127,16 @@ do_update()
         get_hd_fstype $SYSTEM_HD_UUID varFsType
         local hdPart
         hdPart="$(for c in `blkid | grep -m 1 -i $SYSTEM_HD_UUID`; do echo $c | grep -i "/dev" | cut -d":" -f1; done)"
-        mkfs -F -t $varFsType -U $SYSTEM_HD_UUID $hdPart
+        mke2fs -F -t $varFsType -U $SYSTEM_HD_UUID $hdPart
         prepare_mountpoint system
         mount_part_via_uuid $SYSTEM_HD_UUID system
         pushd system
-        
-        unzip -o $UPDATE_PACK $1
+
+        prepare_mountpoint /mnt/oto-system
+        mount -t tmpfs tmpfs /mnt/oto-system
+        unzip -o $UPDATE_PACK $1 -d /mnt/oto-system
         prepare_mountpoint /mnt/system.sfs
-        mount -o loop system.sfs /mnt/system.sfs
+        mount -o loop /mnt/oto-system/system.sfs /mnt/system.sfs
         prepare_mountpoint /mnt/system.img
         mount -t ext4 -o loop /mnt/system.sfs/system.img /mnt/system.img 
         local varFsType
@@ -143,7 +145,8 @@ do_update()
         
         umount /mnt/system.img
         umount /mnt/system.sfs
-        rm -f $1
+        rm /mnt/oto-system/system.sfs
+        umount /mnt/oto-system
         popd
         umount system
         ;;
