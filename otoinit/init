@@ -664,6 +664,7 @@ debug_shell()
     mount_os_img SYSTEM $SYSTEM_IMG
 
     get_param_from_bootargs DATA_IMG
+    ntfsfix `blkid|awk -F ":" '/'$DATA_IMAGE'/{print $1}'` > /dev/null
     mount_os_img DATA $DATA_IMG
     ;;
     
