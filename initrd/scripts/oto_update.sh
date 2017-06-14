@@ -259,7 +259,7 @@ openthos_update()
       prepare_mountpoint data.hd
       
       mount_part_via_uuid $DATA_HD_UUID data.hd
-      if [ $DEBUG -gt 0 ]; then
+      if [ 0$DEBUG -gt 0 ]; then
         ls data.hd
       fi
       get_param_from_bootargs DATA_IMG
