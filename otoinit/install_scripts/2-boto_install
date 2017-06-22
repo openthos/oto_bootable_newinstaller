@@ -12,228 +12,16 @@ CMD=""
 tempfile=/tmp/temp-$$
 menufile=/tmp/menu-$$
 log=/tmp/install-log
-MOUNT="/mnt/data"
+EfiMountPoint=/hd/efi
+DataMountPoint=/hd/data
+DataImgMountPoint=/hd/dataimg
 CPIO=cpio
 SRC="livemedia/OpenThos"
 files="kernel install.img initrd.img ramdisk.img system.*"
 asrc="OpenThos"
-grubcfg=/hd/OpenThos/boto_linux.conf
+bootconf=$EfiMountPoint/OpenThos/boto_linux.conf
 bootdisk=""
-try_mount()
-{
-	RW=$1; shift
-	if [ "${ROOT#*:/}" != "$ROOT" ]; then
-		# for NFS roots, use nolock to avoid dependency to portmapper
-		RW="nolock,$RW"
-	fi
-	# FIXME: any way to mount ntfs gracefully?
-	mount -o $RW $@ || mount -t ntfs -o rw,force $@
-}
-
-rebooting()
-{
-	if [ -n "$1" ];then
-		dialog --title " Rebooting... " --nocancel --pause "$1" 8 41 1
-	else
-		dialog --title " Rebooting... " --nocancel --pause "" 8 41 1
-	fi
-	sync
-	umount -a
-	reboot -f
-}
-
-choose()
-{
-	dialog --clear --title " $1 " \
-		--menu "$2" 20 71 13 --file $menufile 2> $tempfile
-
-	retval=$?
-	choice=`cat $tempfile`
-}
-partition_drive()
-{
-	echo partition_drive ...
-	
-	echo -n > $menufile
-	for i in /sys/block/[shv]d[a-z] /sys/block/mmcblk?; do
-		if [ ! -d $i ]; then  # pathname expansion failed
-			continue
-		fi
-		echo -n `basename $i` >> $menufile
-		if [ -f $i/removable -a `cat $i/removable` -eq 0 ]; then
-			echo -n ' "Harddisk ' >> $menufile
-		else
-			echo -n ' "Removable' >> $menufile
-		fi
-		if [ -f $i/size ]; then
-			echo -n " (" `cat $i/size` "blocks)" >> $menufile
-		fi
-		echo '"' >> $menufile
-	done
-	count=`wc -l $menufile | awk '{ print $1 }'`
-	if [ $count -eq 0 ]; then
-		dialog --title " Error " --msgbox \
-			"\nOK. There is no hard drive to edit partitions." 8 49
-		return 255
-	fi
-	if [ $count -eq 1 ]; then
-		choice=`awk '{ print $1 }' $menufile`
-		retval=0
-	else
-		choose "Choose Drive" "Please select a drive to edit partitions:"
-	fi
-	if [ $retval -eq 0 ]; then
-		dialog --title " Confirm " --yesno "\n Do you want to use GPT?" 7 29
-		if [ $? -eq 0 ]; then
-			cgdisk /dev/$choice
-		else
-			cfdisk /dev/$choice
-		fi
-		if [ $? -eq 0 ]; then
-			retval=0
-		else
-			dialog --title " Confirm " --yesno "\n Looks like fail to use GPT,Do you want to erase all partition to use GPT" 28 29
-				if [ $? -eq 0 ]; then
-					convert_to_gpt /dev/$choice
-					cgdisk /dev/$choice
-					if [ $? -eq 0 ]; then
-						retval=0
-					fi
-				else
-					rebooting "fail to partition"
-				fi
-		fi
-	fi
-	return $retval
-}
-format_fs()
-{
-	local cmd
-	if [ $2 = "data" ];then
-		echo -e '"Do not format" ""\nntfs ""' > $menufile
-	elif [ $2 = "system" ];then
-		echo -e '"Do not format" ""\next4 ""\next3 ""\next2 ""' > $menufile
-	elif [ $2 = "efi" ];then
-		echo -e '"Do not format" ""\nfat32 ""' > $menufile
-	fi
-	choose "Choose filesystem" "Please select a filesystem to format $1:"
-	case "$choice" in
-		ext4)
-			cmd="mke2fs -F -t ext4"
-			;;
-		ext3)
-			cmd="mke2fs -F -t ext3 -j"
-			;;
-		ext2)
-			cmd="mke2fs -F"
-			;;
-		ntfs)
-			cmd="mkntfs -F -f"
-			;;
-		fat32)
-			cmd="mkdosfs"
-			;;
-		*)
-			;;
-	esac
-	if [ -n "$cmd" ]; then
-		dialog --title " Confirm "  --yesno \
-			"\n You chose to format $1 to $choice.\n All data in that partition will LOSE.\n\n Are you sure to format the partition $1?" 10 51
-		[ $? -ne 0 ] && return 1
-		if [ $2 = "efi" ];then
-			$cmd -n EFI /dev/$1 | awk '{
-				# FIXME: very imprecise progress
-				if (match($0, "done"))
-					printf("%d\n", i+=33)
-			}' | progress_bar "Formatting" "Formatting partition $1..."
-		elif [ $2 = "system" ];then
-			$cmd /dev/$1 | awk '{
-				# FIXME: very imprecise progress
-				if (match($0, "done"))
-					printf("%d\n", i+=33)
-			}' | progress_bar "Formatting" "Formatting partition $1..."
-		elif [ $2 = "data" ];then
-			$cmd /dev/$1 | awk '{
-				# FIXME: very imprecise progress
-				if (match($0, "done"))
-					printf("%d\n", i+=33)
-			}' | progress_bar "Formatting" "Formatting partition $1..."
-		fi
-	fi
-}
-
-select_whole_dev()
-{
-	echo -n > $menufile
-	for i in /sys/block/[shv]d[a-z] /sys/block/mmcblk?; do
-		if [ ! -d $i ]; then  # pathname expansion failed
-			continue
-		fi
-		echo -n `basename $i` >> $menufile
-		if [ -f $i/removable -a `cat $i/removable` -eq 0 ]; then
-			echo -n ' "Harddisk ' >> $menufile
-		else
-			echo -n ' "Removable' >> $menufile
-		fi
-		if [ -f $i/size ]; then
-			echo -n " (" `cat $i/size` "blocks)" >> $menufile
-		fi
-		echo '"' >> $menufile
-	done
-	count=`wc -l $menufile | awk '{ print $1 }'`
-	if [ $count -eq 0 ]; then
-		dialog --title " Error " --msgbox \
-			"\nOK. There is no hard drive to edit partitions." 8 49
-		return 255
-	fi
-	if [ $count -eq 1 ]; then
-		choice=`awk '{ print $1 }' $menufile`
-		retval=0
-	else
-		choose "Choose Drive" "Please select a drive to Install OPENTHOS:"
-	fi
-}
-select_dev()
-{
-	echo select_dev ...
-	
-	blkid | grep -v -E "^/dev/block/|^/dev/loop" | cut -b6- | sort | awk '{
-		t="unknown"
-		for (i = NF; i > 1; --i)
-			if (match($i, "^TYPE")) {
-				t=$i
-				break
-			}
-		gsub(/TYPE=|"/, "", t)
-		printf("%s\t%s\n", $1, t)
-	}' > $tempfile
-
-	lsblk=`ls /sys/block | grep -v -E "loop|ram|sr|boot|rpmb"`
-	for d in $lsblk; do
-		p=0
-		for i in /sys/block/$d/$d* /sys/block/$d; do
-			[ -e $i/partition ] && p=1
-			[ $p -eq 1 -a "$i" = "/sys/block/$d" ] && break
-			echo $i | grep -q -E "boot|rpmb" && continue
-			[ -d $i ] && ( tmps=`grep "\`basename $i:\`" $tempfile`;if [ -n "`echo -n "$tmps"`" ];then echo -n $tmps;else echo -n "`basename $i` unknown";fi )
-			[ -d $i ] && ( disk=`basename $i`; partition_size=`blockdev --getsize64 /dev/$disk`;echo " "`expr $partition_size / 1024`"KB" )
-		done
-	done | awk '{
-		sub(/:/, "", $1)
-		printf("\"%-13s%-17s%-13s", $1, $2, $3)
-		system("cd /sys/block; for f in "$1"/device/model "$1"/device/name */"$1"/../device/model */"$1"/../device/name; do [ -e $f ] && echo -n `cat $f` && break; done")
-		printf("\" \"\"\n")
-	} END {
-		printf("\"Create/Modify partitions\" \"\"\n\"Detect devices\" \"\"")
-	}' > $menufile
-	choose "Choose Partition" "Please select a partition to install OPENTHOS "$1" partition:"
-	return $retval
-}
-
-progress_bar()
-{
-	dialog --clear --title " $1 " --gauge "\n $2" 8 70
-}
+source /scripts/install
 
 create_boto_img()
 {
@@ -259,7 +47,7 @@ create_boto_img()
 
 avaiable_space()
 {
-	avaiable=`df -h|grep $MOUNT|awk '{print $4;}'|awk -F "G" '{print $1}'|awk -F "." '{print $1}'`
+	avaiable=`df -h|grep $DataMountPoint|awk '{print $4;}'|awk -F "G" '{print $1}'|awk -F "." '{print $1}'`
 	if [ "$avaiable" -gt 10 ];then
 		return $avaiable
 	else
@@ -278,8 +66,8 @@ create_boto_data_img()
 	dialog --title " Confirm " --yesno \
 		"\nThe installer is going to create a disk image to save the user data.\ndefault space is 10G.\n\nAre you sure to create the image?" 11 62
 	if [ $? -eq 0 ]; then
-		create_boto_img $avaiable $MOUNT/openthos/data.img
-		losetup /dev/loop6 $MOUNT/openthos/data.img
+		create_boto_img $avaiable $DataMountPoint/openthos/data.img
+		losetup /dev/loop6 $DataMountPoint/openthos/data.img
 		make_ext4fs -L /data /dev/loop6 > /dev/tty6
 		[ $? -ne 0 ] && dialog --msgbox "\n Failed to create data.img." 7 33
 	else
@@ -288,40 +76,25 @@ create_boto_data_img()
 	fi
 }
 
-get_part_info()
-{
-	d=0
-	while [ 1 ]; do
-		h=`echo $d | awk '{ printf("%c", $1+97) }'`
-		for part in /sys/block/[shv]d$h/$1 /sys/block/mmcblk$d/$1; do
-			[ -d $part ] && break 2
-		done
-		d=$(($d+1))
-	done
-	p=`cat $part/partition`
-	disk=$(basename `dirname $part`)
-}
-
 boto_install_to()
 {
 	echo boto_install_to ...
 
 	cd /
-	mountpoint -q /hd && umount /hd
-	local disk=/dev/`echo $1|sed 's/[0-9]*$//g'`
-	local device=/dev/$1
+	local disk=`echo $1|sed 's/[0-9]*$//g'`
+	local device=$1
 	while [ 1 ]; do
 		if [ `parted $disk print $device|grep -A 1 "File system"|awk 'NR==2{print $5}'` == "fat32" ];
 		then
 			dialog --title " Confirm "  --yesno \
 				"\n Detect $1 filesystem is FAT32,Reformat it?" 10 51
 			if [ $? -eq 0 ];then
-				format_fs $1 efi
+				format_fs $device efi
 			fi
 		else
-			format_fs $1 efi
+			format_fs $device efi
 		fi
-		try_mount rw $device /hd && break
+		try_mount rw $device $EfiMountPoint && break
 		dialog --clear --title " Error "  --yesno \
 			"\n Cannot mount /dev/$1\n Do you want to format it?" 8 37
 		[ $? -ne 0 ] && return 255
@@ -332,20 +105,20 @@ boto_install_to()
 		size=$(($size+$s))
 	done
 	
-	mkdir -p hd/$asrc
-	cd hd/$asrc
+	mkdir -p $EfiMountPoint/$asrc
+	cd $EfiMountPoint/$asrc
 	rm -rf system*
 	( ( cd /mnt/$SRC/; find $files | $CPIO -H newc -o ) | pv -ns ${size}k | ( $CPIO -iu > /dev/null; echo $? > /tmp/result )) 2>&1 \
 		| progress_bar "Installing OPENTHOS" "Expect to write $size KB..."
 	result=$((`cat /tmp/result`*255))
 	#extract refind install zip
-	cd /hd/$asrc
-	tar -xvf /mnt/$SRC/efi.tar.bz2 -C /hd/ > /dev/null
-	mv /hd/efi/boot /hd/efi/boto
-	UUID=`blkid /dev/$1|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
+	cd $EfiMountPoint/$asrc
+	tar -xvf /mnt/$SRC/efi.tar.bz2 -C $EfiMountPoint > /dev/null
+	mv $EfiMountPoint/efi/boot $EfiMountPoint/efi/boto
+	UUID=`blkid $device|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
 	CMD="quiet androidboot.hardware=android_x86_64 BOOT_MODE=hdimgboot RAMDISK_HD_UUID=$UUID RAMDISK_IMG=OpenThos/ramdisk.img SYSTEM_HD_UUID=$UUID SYSTEM_IMG=OpenThos/system.sfs"
-        bootdisk=/dev/`echo "$1"|tr -d "0-9"`
-	part=`echo "$1"|tr -d "a-z"`
+        bootdisk=`echo "$device"|tr -d "0-9"`
+	part=`echo "$device"|tr -cd "0-9"`
 
 	#finish install openthos EFI partition
 	dialog --infobox "\n Syncing to disk..." 5 27
@@ -355,35 +128,33 @@ boto_install_to()
 }
 boto_data_install_to()
 {
-	cd /
-	mkdir $MOUNT
+	local device=$1
 	while [ 1 ]; do
 		format_fs $1 data
-		if [ `blkid /dev/$1|awk -F "TYPE" '{print $2;}'|awk -F "\"" '{print $2;}'` = "ntfs" ]; then
-			mount.ntfs-3g /dev/$1 $MOUNT && break
+		if [ `blkid $1|awk -F "TYPE" '{print $2;}'|awk -F "\"" '{print $2;}'` = "ntfs" ]; then
+			mount.ntfs-3g $device $DataMountPoint && break
 		else
-			try_mount rw /dev/$1 $MOUNT && break
+			try_mount rw $device $DataMountPoint && break
 		fi
 		dialog --clear --title " Error "  --yesno \
 			"\n Cannot mount /dev/$1\n Do you want to format it?" 8 37
 		[ $? -ne 0 ] && return 255
 	done
-	mkdir $MOUNT/openthos
+	mkdir $DataMountPoint/openthos
 	create_boto_data_img
 	
 	#for data.img
 
-	mount -o loop $MOUNT/openthos/data.img /iso
-	mkdir /iso/vendor/app -p
-	cp /mnt/$SRC/data.img /iso/vendor/app/
-	cd /iso/vendor/app/
-	zcat data.img|cpio -id
+	mount -o loop $DataMountPoint/openthos/data.img $DataImgMountPoint
+	mkdir $DataImgMountPoint/vendor/app -p
+	cd $DataImgMountPoint/vendor/app/
+	zcat /mnt/$SRC/data.img|cpio -id
 	cd /
 
-	UUID=`blkid /dev/$1|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
+	UUID=`blkid $device|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
 	CMD="$CMD DATA_HD_UUID=$UUID DATA_IMG=openthos/data.img"
-	echo "\"OpenThos\"" \"$CMD\" > $grubcfg
-	echo "\"OpenThos DEBUG\"" \"$CMD DEBUG=1\" >> $grubcfg
+	echo "\"OpenThos\"" \"$CMD\" > $bootconf
+	echo "\"OpenThos DEBUG\"" \"$CMD DEBUG=1\" >> $bootconf
 	efibootmgr -c -d $bootdisk -p $part -L OpenThos -l /efi/boto/bootx64.efi
 
 	dialog --infobox "\n Syncing data to disk..." 5 30
@@ -394,11 +165,11 @@ boto_data_install_to()
 boto_hdimg_system()
 {
 	while [ 1 ];do
-		select_dev "SYSTEM"|| rebooting
+		select_system_dev|| rebooting
 		retval=1
 		case "$choice" in
 			[shvm][dm]*)
-				boto_install_to $choice
+				boto_install_to /dev/$choice
 				retval=$?
 				break
 				;;
@@ -416,11 +187,11 @@ boto_hdimg_system()
 
 boto_hdimg_data()
 {
-	select_dev "DATA"|| rebooting
+	select_data_dev || rebooting
 	retval=1
 	case "$choice" in
 		[shvm][dm]*)
-			boto_data_install_to $choice
+			boto_data_install_to /dev/$choice
 			retval=$?
 			;;
 	esac
@@ -445,108 +216,71 @@ manual_install()
 		fi
 	done
 }
-convert_to_gpt()
-{	
-	mkfs.vfat -I $1
-	gdisk $1 << EOF
-2
-w
-y
-EOF
-}
-delete_gpt()
-{
-	DEL=/scripts/del.sh
-	echo "" > $DEL
-	echo "#!/bin/busybox sh" >> $DEL
-	echo "gdisk $1 << EOF" >> $DEL
-	partition=`gdisk -l "$1"|grep -A 10 Number|awk '{if (!match($0,"Number")) print $1;}'|sort -r`
-	echo $partition
-	for c in $partition;do echo "d" >> $DEL;echo $c >> $DEL;done
-	echo $cmd >> $DEL
-	echo "w" >> $DEL
-	echo "y" >> $DEL
-	echo "EOF" >> $DEL
-	chmod +x $DEL
-	sh $DEL
-}
-create_hdimg_gpt()
-{
-	gdisk $1 << EOF
-n
-1
-
-+2G
-0700
-n
-2
-
-
-8300
-w
-y
-EOF
-}
 pre_mount()
 {
 	sys_part=$1"1"
 	data_part=$1"2"
 	mkfs.vfat -I $sys_part
-	mount -t vfat -o rw $sys_part /hd
+	try_mount rw $sys_part $EfiMountPoint
 	mkntfs -F -f $data_part
-	mkdir $MOUNT
-	mount.ntfs-3g -o rw $data_part $MOUNT
+	mount.ntfs-3g -o rw $data_part $DataMountPoint
 }
 install_system()
 {
-	mkdir -p /hd/$asrc
-	cd /hd/$asrc
-	rm -f *
+	mkdir $EfiMountPoint/$asrc
+	cd $EfiMountPoint/$asrc
 	for s in `cd /mnt/$SRC/;du -sk $files | awk '{print $1}'`; do
 		size=$(($size+$s))
 	done
 	( ( cd /mnt/$SRC/; find $files | $CPIO -H newc -o ) | pv -ns ${size}k | ( $CPIO -iu > /dev/null; echo $? > /tmp/result )) 2>&1 \
 		| progress_bar "Installing OPENTHOS" "Expect to write $size KB..."
-	tar -xvf /mnt/$SRC/efi.tar.bz2 -C /hd/ > /dev/null
-	mv /hd/efi/boot /hd/efi/boto
+	tar -xvf /mnt/$SRC/efi.tar.bz2 -C $EfiMountPoint > /dev/null
+	mv $EfiMountPoint/efi/boot $EfiMountPoint/efi/boto
 	UUID=`blkid $1"1"|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
 	CMD="quiet androidboot.hardware=android_x86_64 BOOT_MODE=hdimgboot RAMDISK_HD_UUID=$UUID RAMDISK_IMG=OpenThos/ramdisk.img SYSTEM_HD_UUID=$UUID SYSTEM_IMG=OpenThos/system.sfs"
 	bootdisk=$1
 
 	sync;sync;sync
-	mkdir $MOUNT/openthos
-	freeSize=`df "$MOUNT"|awk 'NR==2{print $4}'`
-	dd if=/dev/zero of=$MOUNT/openthos/data.img bs=1 count=0 seek="$freeSize"k
+	mkdir $DataMountPoint/openthos
+	freeSize=`df "$DataMountPoint"|awk 'NR==2{print $4}'`
+	dd if=/dev/zero of=$DataMountPoint/openthos/data.img bs=1 count=0 seek="$freeSize"k
 	avaiableLoop=`losetup -f`
-	losetup $avaiableLoop $MOUNT/openthos/data.img
+	losetup $avaiableLoop $DataMountPoint/openthos/data.img
 	mke2fs -F -t ext4 -L data $avaiableLoop > /dev/tty6
-	mount -t ext4 $avaiableLoop /iso
-	mkdir /iso/vendor/app -p
-	cd /iso/vendor/app/
+	mount -t ext4 $avaiableLoop $DataImgMountPoint
+	mkdir $DataImgMountPoint/vendor/app -p
+	cd $DataImgMountPoint/vendor/app/
 	zcat /mnt/$SRC/data.img|cpio -id
 
 	UUID=`blkid "$1"2|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
 	CMD="$CMD DATA_HD_UUID=$UUID DATA_IMG=openthos/data.img"
-	echo "\"OpenThos\"" \"$CMD\" > $grubcfg
-	echo "\"OpenThos DEBUG\"" \"$CMD DEBUG=1\" >> $grubcfg
+	echo "\"OpenThos\"" \"$CMD\" > $bootconf
+	echo "\"OpenThos DEBUG\"" \"$CMD DEBUG=1\" >> $bootconf
 	efibootmgr -c -d $bootdisk -p 1 -L OpenThos -l /efi/boto/bootx64.efi
 	sync
 }
-earse_all_partition()
+rebuild_all_partition()
 {
-	dialog --infobox "\n Create GPT Partition..." 5 30
-	convert_to_gpt /dev/$1
-	delete_gpt /dev/$1
-	create_hdimg_gpt /dev/$1
-	pre_mount /dev/$1
-	install_system /dev/$1
+        local disk=$1
+        dialog --infobox "\n Destroy all Partition..." 5 30
+        sgdisk -g -o -Z $disk
+        dialog --infobox "\n Create new GPT Partitions..." 5 45
+        # We just assume that  sector size is 512B
+        sgdisk -g -n 1:2048:4196351 -t 1:ef00 $disk
+        sgdisk -g -n 2:4196352: -t 2:8300 $disk
+}
+hgimg_install_system(){
+	local disk=$1
+	pre_mount $disk
+	install_system $disk	
 }
 auto_install()
 {
 	dialog --title "Auto Install OPENTHOS" --defaultno --yesno "will ERASE whole hard drive,Continue?" 5 45
 	if [ $? -eq 0 ];then
 		select_whole_dev || rebooting
-		earse_all_partition $choice
+		rebuild_all_partition /dev/$choice
+		hgimg_install_system /dev/$choice
 	else
 		rebooting
 	fi
@@ -604,8 +338,12 @@ Manual Install:\n\
 " 25 70
 	return $?
 }
+prepare_install(){
+	mkdir $EfiMountPoint $DataMountPoint $DataImgMountPoint
+}
 hdimg_install()
 {
+	prepare_install
 	user_guide
 	if [ $? -eq 1 ];then
 		manual_install

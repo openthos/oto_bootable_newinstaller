@@ -142,6 +142,26 @@ select_whole_dev()
                 choose "Choose Drive" "Please select a drive to Install OPENTHOS:"
         fi
 }
+select_efi_dev()
+{
+        select_dev
+        choose "Choose Partition" "Please select a partition to install OPENTHOS EFI partition:"
+        return $retval
+}
+select_data_dev()
+{
+        select_dev
+        choose "Choose Partition" "Please select a partition to install OPENTHOS DATA:"
+        return $retval
+}
+
+select_system_dev()
+{
+        select_dev
+        choose "Choose Partition" "Please select a partition to install OPENTHOS System:"
+        return $retval
+}
+
 format_fs()
 {
         local cmd

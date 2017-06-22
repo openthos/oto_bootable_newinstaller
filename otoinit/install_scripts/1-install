@@ -26,25 +26,6 @@ bootconf=$EfiMountPoint/$asrc/boto_linux.conf
 grubcfg=/hd/OpenThos/boto_linux.conf
 bootdisk=""
 source /scripts/install
-select_efi_dev()
-{
-	select_dev
-	choose "Choose Partition" "Please select a partition to install OPENTHOS EFI partition:"
-	return $retval
-}
-select_data_dev()
-{
-	select_dev
-	choose "Choose Partition" "Please select a partition to install OPENTHOS DATA:"
-	return $retval
-}
-
-select_system_dev()
-{
-	select_dev
-	choose "Choose Partition" "Please select a partition to install OPENTHOS System:"
-	return $retval
-}
 
 create_data_img()
 {
@@ -285,7 +266,7 @@ hd_install_system()
 rebuild_all_partition()
 {
 	local disk=$1
-	dialog --infobox "\n Destory all Partition..." 5 30
+	dialog --infobox "\n Destroy all Partition..." 5 30
 	sgdisk -g -o -Z $disk
 	dialog --infobox "\n Create new GPT Partitions..." 5 45
 	# We just assume that  sector size is 512B
