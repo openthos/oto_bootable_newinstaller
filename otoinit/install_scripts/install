@@ -1,0 +1,200 @@
+try_mount()
+{
+        RW=$1; shift
+        if [ "${ROOT#*:/}" != "$ROOT" ]; then
+                # for NFS roots, use nolock to avoid dependency to portmapper
+                RW="nolock,$RW"
+        fi
+        # FIXME: any way to mount ntfs gracefully?
+        mount -o $RW $@ || mount -t ntfs -o rw,force $@
+}
+
+rebooting()
+{
+        dialog --title " Rebooting... " --nocancel --pause "" 8 41 1
+        sync
+        umount -a
+        reboot -f
+}
+
+choose()
+{
+        dialog --clear --title " $1 " \
+                --menu "$2" 20 71 13 --file $menufile 2> $tempfile
+
+        retval=$?
+        choice=`cat $tempfile`
+}
+progress_bar()
+{
+        dialog --clear --title " $1 " --gauge "\n $2" 8 70
+}
+partition_drive()
+{
+        echo partition_drive ...
+
+        echo -n > $menufile
+        for i in /sys/block/[shv]d[a-z] /sys/block/mmcblk?; do
+                if [ ! -d $i ]; then  # pathname expansion failed
+                        continue
+                fi
+                echo -n `basename $i` >> $menufile
+                if [ -f $i/removable -a `cat $i/removable` -eq 0 ]; then
+                        echo -n ' "Harddisk ' >> $menufile
+                else
+                        echo -n ' "Removable' >> $menufile
+                fi
+                if [ -f $i/size ]; then
+                        echo -n " (" `cat $i/size` "blocks)" >> $menufile
+                fi
+                echo '"' >> $menufile
+        done
+        count=`wc -l $menufile | awk '{ print $1 }'`
+        if [ $count -eq 0 ]; then
+                dialog --title " Error " --msgbox \
+                        "\nOK. There is no hard drive to edit partitions." 8 49
+                return 255
+        fi
+        if [ $count -eq 1 ]; then
+                choice=`awk '{ print $1 }' $menufile`
+                retval=0
+        else
+                choose "Choose Drive" "Please select a drive to edit partitions:"
+        fi
+        if [ $retval -eq 0 ]; then
+                dialog --title " Confirm " --yesno "\n Do you want to use GPT?" 7 29
+                if [ $? -eq 0 ]; then
+                        cgdisk /dev/$choice
+                else
+                        cfdisk /dev/$choice
+                fi
+                if [ $? -eq 0 ]; then
+                        retval=1
+                else
+                        retval=255
+                fi
+        fi
+        return $retval
+}
+select_dev()
+{
+        echo select_dev ...
+
+        blkid | grep -v -E "^/dev/block/|^/dev/loop" | cut -b6- | sort | awk '{
+                t="unknown"
+                for (i = NF; i > 1; --i)
+                        if (match($i, "^TYPE")) {
+                                t=$i
+                                break
+                        }
+                gsub(/TYPE=|"/, "", t)
+                printf("%s\t%s\n", $1, t)
+        }' > $tempfile
+
+        lsblk=`ls /sys/block | grep -v -E "loop|ram|sr|boot|rpmb"`
+        for d in $lsblk; do
+                p=0
+                for i in /sys/block/$d/$d* /sys/block/$d; do
+                        [ -e $i/partition ] && p=1
+                        [ $p -eq 1 -a "$i" = "/sys/block/$d" ] && break
+                        echo $i | grep -q -E "boot|rpmb" && continue
+                        [ -d $i ] && ( tmps=`grep "\`basename $i:\`" $tempfile`;if [ -n "`echo -n "$tmps"`" ];then echo -n $tmps;else echo -n "`basename $i` unknown";fi )
+                        [ -d $i ] && ( disk=`basename $i`; partition_size=`blockdev --getsize64 /dev/$disk`;echo " "`expr $partition_size / 1024`"KB" )
+                done
+        done | awk '{
+                sub(/:/, "", $1)
+                printf("\"%-13s%-17s%-13s", $1, $2, $3)
+                system("cd /sys/block; for f in "$1"/device/model "$1"/device/name */"$1"/../device/model */"$1"/../device/name; do [ -e $f ] && echo -n `cat $f` && break; done")
+                printf("\" \"\"\n")
+        } END {
+                printf("\"Create/Modify partitions\" \"\"\n\"Detect devices\" \"\"")
+        }' > $menufile
+}
+
+select_whole_dev()
+{
+        echo -n > $menufile
+        for i in /sys/block/[shv]d[a-z] /sys/block/mmcblk?; do
+                if [ ! -d $i ]; then  # pathname expansion failed
+                        continue
+                fi
+                echo -n `basename $i` >> $menufile
+                if [ -f $i/removable -a `cat $i/removable` -eq 0 ]; then
+                        echo -n ' "Harddisk ' >> $menufile
+                else
+                        echo -n ' "Removable' >> $menufile
+                fi 
+                if [ -f $i/size ]; then
+                        echo -n " (" `cat $i/size` "blocks)" >> $menufile
+                fi
+                echo '"' >> $menufile
+        done
+        count=`wc -l $menufile | awk '{ print $1 }'`
+        if [ $count -eq 0 ]; then
+                dialog --title " Error " --msgbox \
+                        "\nOK. There is no hard drive to edit partitions." 8 49
+                return 255
+        fi 
+        if [ $count -eq 1 ]; then
+                choice=`awk '{ print $1 }' $menufile`
+                retval=0
+        else
+                choose "Choose Drive" "Please select a drive to Install OPENTHOS:"
+        fi
+}
+format_fs()
+{
+        local cmd 
+        if [ $2 = "data" ];then
+                echo -e '"Do not format" ""\next4 ""\next3 ""\next2 ""\nntfs ""' > $menufile
+        elif [ $2 = "system" ];then
+                echo -e '"Do not format" ""\next4 ""\next3 ""\next2 ""' > $menufile
+        elif [ $2 = "efi" ];then
+                echo -e '"Do not format" ""\nfat32 ""' > $menufile
+        fi
+        choose "Choose filesystem" "Please select a filesystem to format $1:"
+        case "$choice" in
+                ext4)
+                        cmd="mke2fs -F -t ext4"
+                        ;;
+                ext3)
+                        cmd="mke2fs -F -t ext3 -j"
+                        ;;
+                ext2)
+                        cmd="mke2fs -F"
+                        ;;
+                ntfs)
+                        cmd="mkntfs -F -f"
+                        ;;
+                fat32)
+                        cmd="mkdosfs"
+                        ;;
+                *)
+                        ;;
+        esac
+        if [ -n "$cmd" ]; then
+                dialog --title " Confirm "  --yesno \
+                        "\n You chose to format $1 to $choice.\n All data in that partition will LOSE.\n\n Are you sure to format the partition $1?" 10 51
+                [ $? -ne 0 ] && return 1
+                if [ $2 = "efi" ];then
+                        $cmd -n EFI /dev/$1 | awk '{
+                                # FIXME: very imprecise progress
+                                if (match($0, "done"))
+                                        printf("%d\n", i+=33)
+                        }' | progress_bar "Formatting" "Formatting partition $1..."
+                elif [ $2 = "system" ];then
+                        $cmd /dev/$1 | awk '{
+                                # FIXME: very imprecise progress
+                                if (match($0, "done"))
+                                        printf("%d\n", i+=33)
+                        }' | progress_bar "Formatting" "Formatting partition $1..."
+                elif [ $2 = "data" ];then
+                        $cmd /dev/$1 | awk '{
+                                # FIXME: very imprecise progress
+                                if (match($0, "done"))
+                                        printf("%d\n", i+=33)
+                        }' | progress_bar "Formatting" "Formatting partition $1..."
+                fi
+        fi
+}
+
