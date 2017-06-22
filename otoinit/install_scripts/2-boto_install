@@ -308,17 +308,24 @@ boto_install_to()
 
 	cd /
 	mountpoint -q /hd && umount /hd
+	local disk=/dev/`echo $1|sed 's/[0-9]*$//g'`
+	local device=/dev/$1
 	while [ 1 ]; do
-		format_fs $1 efi
-		try_mount rw /dev/$1 /hd && break
+		if [ `parted $disk print $device|grep -A 1 "File system"|awk 'NR==2{print $5}'` == "fat32" ];
+		then
+			dialog --title " Confirm "  --yesno \
+				"\n Detect $1 filesystem is FAT32,Reformat it?" 10 51
+			if [ $? -eq 0 ];then
+				format_fs $1 efi
+			fi
+		else
+			format_fs $1 efi
+		fi
+		try_mount rw $device /hd && break
 		dialog --clear --title " Error "  --yesno \
 			"\n Cannot mount /dev/$1\n Do you want to format it?" 8 37
 		[ $? -ne 0 ] && return 255
 	done
-
-	mountpoint -q /hd && umount /hd
-	mkfs.vfat -n EFI /dev/$1
-	try_mount rw /dev/$1 /hd
 
 	size=0
 	for s in `cd /mnt/$SRC/;du -sk $files | awk '{print $1}'`; do
@@ -510,8 +517,14 @@ install_system()
 	mkdir $MOUNT/openthos
 	freeSize=`df "$MOUNT"|awk 'NR==2{print $4}'`
 	dd if=/dev/zero of=$MOUNT/openthos/data.img bs=1 count=0 seek="$freeSize"k
-	losetup /dev/loop6 $MOUNT/openthos/data.img
-	mke2fs -F -t ext4 -L data /dev/loop6 > /dev/tty6
+	avaiableLoop=`losetup -f`
+	losetup $avaiableLoop $MOUNT/openthos/data.img
+	mke2fs -F -t ext4 -L data $avaiableLoop > /dev/tty6
+	mount -t ext4 $avaiableLoop /iso
+	mkdir /iso/vendor/app -p
+	cd /iso/vendor/app/
+	zcat /mnt/$SRC/data.img|cpio -id
+
 	UUID=`blkid "$1"2|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
 	CMD="$CMD DATA_HD_UUID=$UUID DATA_IMG=openthos/data.img"
 	echo "\"OpenThos\"" \"$CMD\" > $grubcfg
@@ -541,8 +554,8 @@ auto_install()
 manual_install_guide(){
 dialog --title "Manual Install Guide" --yes-label "Understand" --no-label "Cancel" --yesno "\
 ------------------------------------------------------------------------------------\n\
-                         |Choose sda1 to install System|\n\
-                         -------------------------------\n\
+                    |Choose sda1 to install System Partition|\n\
+                    -----------------------------------------\n\
                                        |\n 
                          -------------------------------\n\
                          |    Format sda1 with FAT32   |\n\
@@ -552,9 +565,9 @@ dialog --title "Manual Install Guide" --yes-label "Understand" --no-label "Cance
                          |         Install System      |\n\
                          -------------------------------\n\
                                        |\n 
-                         -------------------------------\n\
-                         |Choose sda2 to install System|\n\
-                         -------------------------------\n\
+                     ---------------------------------------\n\
+                     |Choose sda2 to install Data Partition|\n\
+                     ---------------------------------------\n\
                                        |\n 
                          -------------------------------\n\
                          |    Format sda2 with NTFS    |\n\
@@ -570,8 +583,6 @@ dialog --title "Manual Install Guide" --yes-label "Understand" --no-label "Cance
 }
 user_guide()
 {
-	#dialog --title "Install OpenThos Guide" --yes-label Auto\ Install --no-label Manuall\ Install --yesno "Dear User:\nAbout the Install method:\n    If you're a hacker,you can try \"Manually Install\".\n    else maybe you choose the \"Auto Install\".\n\nProvide some default parameter as guideline for manual installtion.\n    1.OPENTHOS EFI partition\n    expect you choose 8G size as default for store system file.we don't change it normally\n\n    2.OPENTHOS DATA partition\n    expect you choose 100G size as default for store your private data" 25 70
-	#[ $? -eq 1 ] && return 1
 	dialog --title "Install OpenThos Guide" --yes-label Auto\ Install --no-label Manuall\ Install --yesno "\
 ------------------------------------------------------------------\n\
 |                          Install Method                        |\n\
@@ -598,10 +609,8 @@ hdimg_install()
 	user_guide
 	if [ $? -eq 1 ];then
 		manual_install
-		sum=5;while [[ sum -gt 0 ]];do echo $sum;sum=`expr $sum - 1`;dialog --title " REBOOTING OPENTHOS" --infobox "\n        $sum" 7 30 ;sleep 1; done
 	else 
 		auto_install
 	fi
-	#manual_install
 	rebooting
 }
