@@ -144,7 +144,8 @@ select_whole_dev()
 }
 format_fs()
 {
-        local cmd 
+        local cmd
+	local device=$1
         if [ $2 = "data" ];then
                 echo -e '"Do not format" ""\next4 ""\next3 ""\next2 ""\nntfs ""' > $menufile
         elif [ $2 = "system" ];then
@@ -152,7 +153,7 @@ format_fs()
         elif [ $2 = "efi" ];then
                 echo -e '"Do not format" ""\nfat32 ""' > $menufile
         fi
-        choose "Choose filesystem" "Please select a filesystem to format $1:"
+        choose "Choose filesystem" "Please select a filesystem to format $device:"
         case "$choice" in
                 ext4)
                         cmd="mke2fs -F -t ext4"
@@ -174,26 +175,26 @@ format_fs()
         esac
         if [ -n "$cmd" ]; then
                 dialog --title " Confirm "  --yesno \
-                        "\n You chose to format $1 to $choice.\n All data in that partition will LOSE.\n\n Are you sure to format the partition $1?" 10 51
+                        "\n You chose to format $device to $choice.\n All data in that partition will LOSE.\n\n Are you sure to format the partition $device?" 10 51
                 [ $? -ne 0 ] && return 1
                 if [ $2 = "efi" ];then
-                        $cmd -n EFI /dev/$1 | awk '{
+                        $cmd -n EFI $device | awk '{
                                 # FIXME: very imprecise progress
                                 if (match($0, "done"))
                                         printf("%d\n", i+=33)
-                        }' | progress_bar "Formatting" "Formatting partition $1..."
+                        }' | progress_bar "Formatting" "Formatting partition $device..."
                 elif [ $2 = "system" ];then
-                        $cmd /dev/$1 | awk '{
+                        $cmd $device | awk '{
                                 # FIXME: very imprecise progress
                                 if (match($0, "done"))
                                         printf("%d\n", i+=33)
-                        }' | progress_bar "Formatting" "Formatting partition $1..."
+                        }' | progress_bar "Formatting" "Formatting partition $device..."
                 elif [ $2 = "data" ];then
-                        $cmd /dev/$1 | awk '{
+                        $cmd $device | awk '{
                                 # FIXME: very imprecise progress
                                 if (match($0, "done"))
                                         printf("%d\n", i+=33)
-                        }' | progress_bar "Formatting" "Formatting partition $1..."
+                        }' | progress_bar "Formatting" "Formatting partition $device..."
                 fi
         fi
 }

@@ -82,10 +82,22 @@ boto_install_to()
 {
 	#format install dev and mount to /hd
 	cd /
-	mountpoint -q /hd && umount /hd
+	mountpoint -q $EfiMountPoint && umount $EfiMountPoint
+	local disk=`echo $1|sed 's/[0-9]*$//g'`
+	local device=$1
 	while [ 1 ]; do
-		format_fs $1 efi
-		try_mount rw /dev/$1 /hd && break
+		if [ `parted $disk print $device|grep -A 1 "File system"|awk 'NR==2{print $5}'` == "fat32" ];
+		then
+			dialog --title " Confirm "  --yesno \
+				"\n Detect $1 filesystem is FAT32,Reformat it?" 10 51
+			if [ $? -eq 0 ];then
+				format_fs $1 efi
+			fi
+		else
+			format_fs $1 efi
+		fi
+
+		try_mount rw $device $EfiMountPoint && break
 		dialog --clear --title " Error "  --yesno \
 			"\n Cannot mount /dev/$1\n Do you want to format it?" 8 37
 		[ $? -ne 0 ] && return 255
@@ -95,22 +107,17 @@ boto_install_to()
 	#dialog --title " Confirm " --no-label Skip  --yesno \
 	#	"\n Do you want to install OpenThos" 7 39
 	#install refind tool
-	tar -xvf /mnt/$SRC/efi.tar.bz2 -C /hd/ > /dev/null
-	mv /hd/efi/boot /hd/efi/boto
+	tar -xvf /mnt/$SRC/efi.tar.bz2 -C $EfiMountPoint > /dev/null
+	mv $EfiMountPoint/efi/boot $EfiMountPoint/efi/boto
 
-	UUID=`blkid /dev/$1|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
+	UUID=`blkid $device|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
 	CMD="quiet androidboot.hardware=android_x86_64 BOOT_MODE=hdboot RAMDISK_HD_UUID=$UUID RAMDISK_IMG=OpenThos/ramdisk.img"
-        bootdisk=/dev/`echo "$1"|tr -d "0-9"`
-	part=`echo "$1"|tr -d "a-z"`
 	
-	#extract image file to install device
-	files="/mnt/$SRC/install.img /mnt/$SRC/kernel /mnt/$SRC/initrd.img /mnt/$SRC/ramdisk.img"
-
-	mkdir -p hd/$asrc
-	cp $files /hd/$asrc/ -rf
-
+	mkdir -p $EfiMountPoint/$asrc
+	cp $files $EfiMountPoint/$asrc/ -rf
+	bootdisk=/dev/`echo "$1"|tr -d "0-9"`
+	part=`echo "$1"|tr -d "a-z"`
 	dialog --infobox "\n Syncing installtion efi partition to disk..." 5 50
-	sleep 1
 	sync
 
 	return $result
@@ -119,11 +126,11 @@ boto_install_hd()
 {
 	echo boto_install_hd...
 
-	select_dev || rebooting
+	select_efi_dev || rebooting
 	retval=1
 	case "$choice" in
 		[shvm][dm]*)
-			boto_install_to $choice
+			boto_install_to /dev/$choice
 			retval=$?
 			;;
 		Create*)
@@ -139,28 +146,29 @@ boto_install_hd()
 
 boto_data_install_to()
 {
-	cd /
-	mkdir $MOUNT
+	local device=$1
+	mkdir $DataMountPoint
 	while [ 1 ]; do
-		format_fs $1 data
-		if [ `blkid /dev/$1|awk -F "TYPE" '{print $2;}'|awk -F "\"" '{print $2;}'` = "ntfs" ];then
-			mount.ntfs-3g /dev/$1 $MOUNT && break
+		format_fs $device data
+		if [ `blkid $device|awk -F "TYPE" '{print $2;}'|awk -F "\"" '{print $2;}'` = "ntfs" ];then
+			mount.ntfs-3g $device $DataMountPoint && break
 		else
-			try_mount rw /dev/$1 $MOUNT && break
+			try_mount rw $device $DataMountPoint && break
 		fi
+		#try_mount rw $device $DataMountPoint && break
 		dialog --clear --title " Error "  --yesno \
-			"\n Cannot mount /dev/$1\n Do you want to format it?" 8 37
+			"\n Cannot mount $device\n Do you want to format it?" 8 37
 	done
-	mkdir $MOUNT/vendor/app -p
-	cp /mnt/$SRC/data.img $MOUNT/vendor/app/
-	cd $MOUNT/vendor/app/
-	zcat data.img|cpio -id
+	mkdir $DataMountPoint/vendor/app -p
+	#cp /mnt/$SRC/data.img $DataMountPoint/vendor/app/
+	cd $DataMountPoint/vendor/app/
+	zcat /mnt/$SRC/data.img|cpio -id
 	#create_boto_data_img
 
-	UUID=`blkid /dev/$1|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
+	UUID=`blkid $device|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
 	CMD="$CMD DATA_HD_UUID=$UUID"
-	echo "\"OpenThos\"" \"$CMD\" > $grubcfg
-	echo "\"OpenThos DEBUG\"" \"$CMD DEBUG=1\" >> $grubcfg
+	echo "\"OpenThos\"" \"$CMD\" > $bootconf
+	echo "\"OpenThos DEBUG\"" \"$CMD DEBUG=1\" >> $bootconf
 	efibootmgr -c -d $bootdisk -p $part -L OpenThos -l /efi/boto/bootx64.efi
 
 	dialog --infobox "\n Syncing data to disk..." 5 30
@@ -173,39 +181,50 @@ boto_install_data_hd()
 	retval=1
 	case "$choice" in
 		[shvm][dm]*)
-			boto_data_install_to $choice
+			boto_data_install_to /dev/$choice
 			retval=$?
 			;;
+		Create*)
+			partition_drive
+			retval=$?
+			;;
+		Detect*)
+			dialog --title " Detecting... " --nocancel --pause "" 8 41 1
 	esac
 	return $retval
 }
 boto_system_install_to()
 {
-	format_fs $1 system
+	local device=$1
+	format_fs $device system
 	if [ -e /mnt/$SRC/system.sfs ]; then
 		mkdir /sfs/sfs -p
 		mkdir /sfs/system -p
                 mount -o loop /mnt/$SRC/system.sfs /sfs/sfs
 		mount -o loop /sfs/sfs/system.img /sfs/system
         fi
-	mount /dev/$1 /iso
+	mount $device $SysMountPoint
 	echo "Install System File..."
-	cp -af /sfs/system/* /iso/
+	cp -af /sfs/system/* $SysMountPoint/
 
-	UUID=`blkid /dev/$1|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
+	UUID=`blkid $device|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
 	CMD="$CMD SYSTEM_HD_UUID=$UUID "
 }
 boto_install_system_hd()
 {
-	
-
 	select_system_dev || rebooting
 	retval=1
 	case "$choice" in
 		[shvm][dm]*)
-			boto_system_install_to $choice
+			boto_system_install_to /dev/$choice
 			retval=$?
 			;;
+		Create*)
+			partition_drive
+			retval=$?
+			;;
+		Detect*)
+			dialog --title " Detecting... " --nocancel --pause "" 8 41 1
 	esac
 	return $retval
 }
@@ -265,7 +284,7 @@ hd_install_system()
 }
 rebuild_all_partition()
 {
-	local disk=/dev/$1
+	local disk=$1
 	dialog --infobox "\n Destory all Partition..." 5 30
 	sgdisk -g -o -Z $disk
 	dialog --infobox "\n Create new GPT Partitions..." 5 45
@@ -275,16 +294,16 @@ rebuild_all_partition()
 	sgdisk -g -n 3:12584960: -t 3:8300 $disk
 }
 hd_install_all(){
-	pre_mount /dev/$1
-	hd_install_system /dev/$1
+	pre_mount $1
+	hd_install_system $1
 }
 hd_auto_install()
 {
 	dialog --title "Auto Install OPENTHOS" --defaultno --yesno "will ERASE whole hard drive,Continue?" 5 45
 	if [ $? -eq 0 ];then
 		select_whole_dev || rebooting
-		rebuild_all_partition $choice
-		hd_install_all $choice
+		rebuild_all_partition /dev/$choice
+		hd_install_all /dev/$choice
 	fi
 	rebooting
 }
@@ -386,8 +405,8 @@ hd_prepare_install(){
 }
 hd_install()
 {
-	hd_user_guide
 	hd_prepare_install
+	hd_user_guide
 	if [ $? -eq 1 ];then
 		hd_manual_install
 		sum=5;while [[ sum -gt 0 ]];do echo $sum;sum=`expr $sum - 1`;dialog --title " REBOOTING OPENTHOS" --infobox "\n        $sum" 7 30 ;sleep 1; done
