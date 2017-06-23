@@ -20,7 +20,6 @@ SRC="livemedia/OpenThos"
 files="kernel install.img initrd.img ramdisk.img system.*"
 asrc="OpenThos"
 bootconf=$EfiMountPoint/OpenThos/boto_linux.conf
-bootdisk=""
 source /scripts/install
 
 create_boto_img()
@@ -87,7 +86,7 @@ boto_install_to()
 		if [ `parted $disk print $device|grep -A 1 "File system"|awk 'NR==2{print $5}'` == "fat32" ];
 		then
 			dialog --title " Confirm "  --yesno \
-				"\n Detect $1 filesystem is FAT32,Reformat it?" 10 51
+				"\n Detect $1 filesystem is FAT32,Reformat it?" 10 60
 			if [ $? -eq 0 ];then
 				format_fs $device efi
 			fi
@@ -117,7 +116,7 @@ boto_install_to()
 	mv $EfiMountPoint/efi/boot $EfiMountPoint/efi/boto
 	UUID=`blkid $device|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
 	CMD="quiet androidboot.hardware=android_x86_64 BOOT_MODE=hdimgboot RAMDISK_HD_UUID=$UUID RAMDISK_IMG=OpenThos/ramdisk.img SYSTEM_HD_UUID=$UUID SYSTEM_IMG=OpenThos/system.sfs"
-        bootdisk=`echo "$device"|tr -d "0-9"`
+	bootdisk=`echo "$device"|tr -d "0-9"`
 	part=`echo "$device"|tr -cd "0-9"`
 
 	#finish install openthos EFI partition
@@ -261,13 +260,13 @@ install_system()
 }
 rebuild_all_partition()
 {
-        local disk=$1
-        dialog --infobox "\n Destroy all Partition..." 5 30
-        sgdisk -g -o -Z $disk
-        dialog --infobox "\n Create new GPT Partitions..." 5 45
-        # We just assume that  sector size is 512B
-        sgdisk -g -n 1:2048:4196351 -t 1:ef00 $disk
-        sgdisk -g -n 2:4196352: -t 2:8300 $disk
+	local disk=$1
+	dialog --infobox "\n Destroy all Partition..." 5 30
+	sgdisk -g -o -Z $disk
+	dialog --infobox "\n Create new GPT Partitions..." 5 45
+	# We just assume that  sector size is 512B
+	sgdisk -g -n 1:2048:4196351 -t 1:ef00 $disk
+	sgdisk -g -n 2:4196352: -t 2:8300 $disk
 }
 hgimg_install_system(){
 	local disk=$1
@@ -317,7 +316,7 @@ dialog --title "Manual Install Guide" --yes-label "Understand" --no-label "Cance
 }
 user_guide()
 {
-	dialog --title "Install OpenThos Guide" --yes-label Auto\ Install --no-label Manuall\ Install --yesno "\
+	dialog --title "Install OpenThos Guide" --yes-label Auto\ Install --no-label Manual\ Install --yesno "\
 ------------------------------------------------------------------\n\
 |                          Install Method                        |\n\
 ------------------------------------------------------------------\n\

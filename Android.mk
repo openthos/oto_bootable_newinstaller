@@ -25,18 +25,6 @@ include $(BUILD_HOST_EXECUTABLE)
 
 VER ?= $(shell date +"%F")
 
-$(shell echo "OpenThos Release Note" >$(PRODUCT_OUT)/system/ReleaseNote.txt)
-$(shell echo "" >>$(PRODUCT_OUT)/system/ReleaseNote.txt)
-$(shell echo "OpenThos is modern desktop OS based on android" >>$(PRODUCT_OUT)/system/ReleaseNote.txt)
-$(shell echo "Rleased by: Tsinghua University" >>$(PRODUCT_OUT)/system/ReleaseNote.txt)
-$(shell echo "Build Date:`date`" >>$(PRODUCT_OUT)/system/ReleaseNote.txt)
-$(shell echo "version:"`curl -sf -L http://dev.openthos.org/openthos/oto_ota.ver|\
-	awk -F "=" '{if(NR==1){gsub("\\.","",$$2);ver=$$2+1;print int(ver/100)"."int(ver%100/10)"."ver%100%10}}'`\
-	 > $(PRODUCT_OUT)/system/version)
-$(shell echo -n "date:" >> $(PRODUCT_OUT)/system/version)
-$(shell date "+%Y.%m.%d" >> $(PRODUCT_OUT)/system/version)
-
-
 # use squashfs for iso, unless explictly disabled
 ifneq ($(USE_SQUASHFS),0)
 MKSQUASHFS = $(shell which mksquashfs)
@@ -73,7 +61,7 @@ initrd_dir := $(LOCAL_PATH)/initrd
 initrd_bin := \
 	$(initrd_dir)/init \
 	$(wildcard $(initrd_dir)/*/*)
-
+local_dir := $(LOCAL_PATH)
 systemimg  := $(PRODUCT_OUT)/system.$(if $(MKSQUASHFS),sfs,img)
 
 INITRD_RAMDISK := $(PRODUCT_OUT)/initrd.img
@@ -93,20 +81,18 @@ $(OTO_INITRD_RAMDISK): $(initrd_bin) $(systemimg) $(TARGET_INITRD_SCRIPTS) | $(A
 	$(if $(TARGET_INITRD_SCRIPTS),$(ACP) -p $(TARGET_INITRD_SCRIPTS) $(TARGET_INSTALLER_OUT)/scripts)
 	ln -s /bin/ld-linux.so.2 $(TARGET_INSTALLER_OUT)/lib
 	mkdir -p $(addprefix $(TARGET_INSTALLER_OUT)/,android iso mnt proc sys tmp sfs hd)
-	echo "VER=$(VER)" > $(TARGET_INSTALLER_OUT)/scripts/00-ver
-	$(ACP) -fp $(initrd_dir)/../otoinit/init $(TARGET_INSTALLER_OUT)/
-	$(ACP) -fp $(initrd_dir)/../otoinit/install_scripts/* $(TARGET_INSTALLER_OUT)/scripts/
+	$(ACP) -fp $(local_dir)/otoinit/init $(TARGET_INSTALLER_OUT)/
 	$(MKBOOTFS) $(TARGET_INSTALLER_OUT) | gzip -9 > $@
 
 INSTALL_RAMDISK := $(PRODUCT_OUT)/install.img
-$(INSTALL_RAMDISK): $(if $(TARGET_PREBUILT_KERNEL),$(TARGET_PREBUILT_KERNEL),$(PRODUCT_OUT)/kernel)
 $(INSTALL_RAMDISK): $(wildcard $(LOCAL_PATH)/install/*/* $(LOCAL_PATH)/install/*/*/*/* $(LOCAL_PATH)/otoinit/install_scripts/*) | $(MKBOOTFS)
 	$(if $(TARGET_INSTALL_SCRIPTS),$(ACP) -p $(TARGET_INSTALL_SCRIPTS) $(TARGET_INSTALLER_OUT)/scripts)
 	$(hide) mkdir -p $(@D)/modules/bin && ln -f `find $(@D)/obj/kernel -name atkbd.ko -o -name efivarfs.ko` $(@D)/modules/bin
-	$(MKBOOTFS) $(dir $(dir $(<D))) $(@D)/modules | gzip -9 > $@
+	$(hide) mkdir -p $(@D)/oto/scripts && $(ACP) -fp $(local_dir)/otoinit/install_scripts/* $(@D)/oto/scripts/
+	$(MKBOOTFS) $(dir $(dir $(<D))) $(@D)/modules $(@D)/oto | gzip -9 > $@
 
 DATA_IMG := $(PRODUCT_OUT)/data.img
-$(DATA_IMG): $(wildcard $(LOCAL_PATH)/../../packages/apps/ExternalApp) | $(MKBOOTFS)
+$(DATA_IMG): $(wildcard $(ANDROID_BUILD_TOP)/packages/apps/ExternalApp) | $(MKBOOTFS)
 	$(MKBOOTFS) $^ | gzip -9 > $@
 
 boot_dir := $(PRODUCT_OUT)/boot
@@ -147,43 +133,37 @@ $(EFI_IMAGE): $(wildcard $(LOCAL_PATH)/boot/efi/*/*) $(BUILT_IMG) $(ESP_LAYOUT) 
 	$(hide) rm -f $@.fat
 
 # Note: copy from EFI_IMAGE
-OTO_BUILT_IMG := $(addprefix $(PRODUCT_OUT)/,ramdisk.img oto_initrd.img install.img system.sfs)
+OTO_BUILT_IMG := $(addprefix $(PRODUCT_OUT)/,ramdisk.img install.img system.sfs)
 OTO_BUILT_IMG += $(if $(TARGET_PREBUILT_KERNEL),$(TARGET_PREBUILT_KERNEL),$(PRODUCT_OUT)/kernel)
-REFIND=efi.tar.bz2
+REFIND=$(PRODUCT_OUT)/efi.tar.bz2
 OTO_IMAGE := $(PRODUCT_OUT)/$(TARGET_PRODUCT)_oto.img
 ESP_LAYOUT := $(LOCAL_PATH)/editdisklbl/esp_layout.conf
-$(OTO_IMAGE): $(wildcard $(LOCAL_PATH)/boot/efi/*/*) $(OTO_BUILT_IMG) $(DATA_IMG) $(ESP_LAYOUT) | $(edit_mbr)
-	$(shell if [ ! -d  $(@D)/OpenThos ];then mkdir $(@D)/OpenThos;fi)
-	@tar jcf $(REFIND) -C $(<D)/../../../install/refind efi
-	@mv $(REFIND) $(PRODUCT_OUT)/OpenThos/
-	@cp $(<D)/../../../install/refind/boto_linux.conf $(PRODUCT_OUT)/OpenThos/
-	$(shell cp $(OTO_BUILT_IMG) $(DATA_IMG) $(PRODUCT_OUT)/OpenThos/ -f)
-	$(shell mv $(PRODUCT_OUT)/OpenThos/oto_initrd.img $(PRODUCT_OUT)/OpenThos/initrd.img -f)
-	@echo $(<D)   $(@D)
-	#$(hide) sed "s|VER|$(VER)|; s|CMDLINE|$(BOARD_KERNEL_CMDLINE)|" $(<D)/../../../otoinit/grub.cfg > $(@D)/grub.cfg
+$(OTO_IMAGE): $(wildcard $(LOCAL_PATH)/install/refind/*) $(OTO_INITRD_RAMDISK) $(OTO_BUILT_IMG) $(DATA_IMG) $(ESP_LAYOUT) | $(edit_mbr)
+	$(hide) tar jcf $(REFIND) -C $(<D) efi
+	$(hide) cp $(PRODUCT_OUT)/oto_initrd.img $(PRODUCT_OUT)/initrd.img
 	$(hide) size=0; \
 	for s in `du -sk $^ | awk '{print $$1}'`; do \
 		size=$$(($$size+$$s)); \
         done; \
-	s=`du -sk $(@D)/OpenThos/$(REFIND)|awk '{print $$1}'`;size=$$(($$size+$$s + 8096)); \
+	s=`du -sk $(REFIND)|awk '{print $$1}'`;size=$$(($$size+$$s + 8096)); \
 	size=$$(($$(($$(($$(($$(($$size + $$(($$size / 100)))) - 1)) / 32)) + 1)) * 32)); \
 	rm -f $@.fat; mkdosfs -n OTO_INSTDSK -C $@.fat $$size
-	mcopy -Qsi $@.fat $(<D)/../../../install/refind/efi $(PRODUCT_OUT)/OpenThos ::
-	#$(hide) mcopy -Qoi $@.fat $(@D)/grub.cfg ::efi/boot
+	$(hide) mcopy -Qsi $@.fat $(<D)/efi ::
+	$(hide) mmd -i $@.fat ::OpenThos
+	$(hide) mcopy -Qsi $@.fat $(OTO_BUILT_IMG) $(DATA_IMG) $(PRODUCT_OUT)/initrd.img $(REFIND) $(<D)/boto_linux.conf ::OpenThos/
 	$(hide) cat /dev/null > $@; $(edit_mbr) -l $(ESP_LAYOUT) -i $@ esp=$@.fat
-	$(hide) rm -f $@.fat
+	$(hide) rm -f $@.fat $(PRODUCT_OUT)/initrd.img
 
-VERSION_FILE=$(LOCAL_PATH)/../../bootable/newinstaller/otoinit/version
-UPDATE_LIST=$(LOCAL_PATH)/../../bootable/newinstaller/otoinit/update.list
+VERSION_FILE=$(local_dir)/otoinit/version
+UPDATE_LIST=$(local_dir)/otoinit/update.list
 UPDATE=openthos
-VERSION:=$(shell cat $(VERSION_FILE)|grep OpenThos|awk '{print $$2;}')
+VERSION := $(shell cat $(VERSION_FILE)|awk '/OpenThos/{print $$2;}')
 
-UPDATE_IMG:= $(addprefix $(PRODUCT_OUT)/OpenThos/, $(shell cat $(UPDATE_LIST)))
+UPDATE_IMG:= $(addprefix $(PRODUCT_OUT)/, $(shell cat $(UPDATE_LIST)))
 UPDATE_ZIP := $(PRODUCT_OUT)/$(UPDATE)_$(VERSION).zip
 $(UPDATE_ZIP): $(VERSION_FILE) $(UPDATE_LIST) $(OTO_IMAGE)
 	$(hide) rm -rf $@
-	zip -qj $(UPDATE_ZIP) $(UPDATE_IMG) $(VERSION_FILE) $(UPDATE_LIST)
-	echo LOCAL_PATH=$(LOCAL_PATH)
+	$(hide) zip -qj $@ $(UPDATE_IMG) $(VERSION_FILE) $(UPDATE_LIST)
 
 .PHONY: iso_img usb_img efi_img oto_img update_zip
 iso_img: $(ISO_IMAGE)
