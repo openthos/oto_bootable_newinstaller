@@ -32,7 +32,7 @@ MKSQUASHFS = $(shell which mksquashfs)
 define build-squashfs-target
 	$(if $(shell $(MKSQUASHFS) -version | grep "version [0-3].[0-9]"),\
 		$(error Your mksquashfs is too old to work with kernel 2.6.29. Please upgrade to squashfs-tools 4.0))
-	$(hide) $(MKSQUASHFS) $(1) $(2) -noappend
+	$(hide) $(MKSQUASHFS) $(1) $(2) -noappend -comp gzip
 endef
 endif
 
