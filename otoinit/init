@@ -598,7 +598,7 @@ debug_shell()
       :
     fi
 
-    mount -t tmpfs -o size=512M tmpfs data
+    mount -t tmpfs tmpfs data
 
     popd
 
@@ -622,7 +622,7 @@ debug_shell()
 	  mount -t $DATA_FS $DATA_PART $ANDROID_DIR/data
 	else
 	  dbg_echo "Evaluation mode failed."
-	  mount -t tmpfs -o size=512M tmpfs $ANDROID_DIR/data
+	  mount -t tmpfs tmpfs $ANDROID_DIR/data
 	fi
 
     fi
