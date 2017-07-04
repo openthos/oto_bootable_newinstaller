@@ -65,9 +65,9 @@ boto_install_to()
 	local disk=`echo $1|sed 's/[0-9]*$//g'`
 	local device=$1
 	while [ 1 ]; do
-		if [ `parted $disk print $device|grep -A 1 "File system"|awk 'NR==2{print $5}'` == "fat32" ];
+		if [ -n "`blkid $device|grep vfat`" ];
 		then
-			dialog --title " Confirm "  --yesno \
+			dialog --defaultno --title " Confirm "  --yesno \
 				"\n Detect $1 filesystem is FAT32,Reformat it?" 10 60
 			if [ $? -eq 0 ];then
 				format_fs $1 efi
