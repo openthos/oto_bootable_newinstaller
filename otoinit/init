@@ -733,7 +733,10 @@ debug_shell()
 
   get_param_from_bootargs RECOVERY
   if [ "$RECOVERY" = "1" ];then
-    rm -rf /android/data/*
+    recovery_hint
+    if [ $? -eq 0 ];then
+      rm -rf /android/data/*
+    fi
   fi
 
 
