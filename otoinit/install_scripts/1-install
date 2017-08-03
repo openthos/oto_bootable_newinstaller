@@ -84,6 +84,10 @@ boto_install_to()
 
 	tar -xvf /mnt/$SRC/efi.tar.bz2 -C $EfiMountPoint > /dev/null
 	mv $EfiMountPoint/efi/boot $EfiMountPoint/efi/boto
+	if [ ! -e $EfiMountPoint/efi/boot/bootx64.efi ];then
+		mkdir $EfiMountPoint/efi/boot -p
+		mv $EfiMountPoint/efi/boto/fallback_x64.efi $EfiMountPoint/efi/boot/bootx64.efi
+	fi
 
 	UUID=`blkid $device|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
 	CMD="quiet androidboot.hardware=android_x86_64 BOOT_MODE=hdboot RAMDISK_HD_UUID=$UUID RAMDISK_IMG=OpenThos/ramdisk.img"
@@ -239,6 +243,11 @@ hd_install_system()
 	SUUID=`blkid "$1"2|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
 	tar -xvf /mnt/$SRC/efi.tar.bz2 -C $EfiMountPoint/ > /dev/null
 	mv $EfiMountPoint/efi/boot $EfiMountPoint/efi/boto
+	if [ ! -e $EfiMountPoint/efi/boot/bootx64.efi ];then
+		mkdir $EfiMountPoint/efi/boot -p
+		mv $EfiMountPoint/efi/boto/fallback_x64.efi $EfiMountPoint/efi/boot/bootx64.efi
+	fi
+
 	UUID=`blkid $1"1"|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
 	CMD="quiet androidboot.hardware=android_x86_64 BOOT_MODE=hdboot RAMDISK_HD_UUID=$UUID RAMDISK_IMG=OpenThos/ramdisk.img SYSTEM_HD_UUID=$SUUID"
 	bootdisk=$1

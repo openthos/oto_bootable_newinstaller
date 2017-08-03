@@ -114,6 +114,11 @@ boto_install_to()
 	cd $EfiMountPoint/$asrc
 	tar -xvf /mnt/$SRC/efi.tar.bz2 -C $EfiMountPoint > /dev/null
 	mv $EfiMountPoint/efi/boot $EfiMountPoint/efi/boto
+	if [ ! -e $EfiMountPoint/efi/boot/bootx64.efi ];then
+		mkdir $EfiMountPoint/efi/boot -p
+		mv $EfiMountPoint/efi/boto/fallback_x64.efi $EfiMountPoint/efi/boot/bootx64.efi
+	fi
+
 	UUID=`blkid $device|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
 	CMD="quiet androidboot.hardware=android_x86_64 BOOT_MODE=hdimgboot RAMDISK_HD_UUID=$UUID RAMDISK_IMG=OpenThos/ramdisk.img SYSTEM_HD_UUID=$UUID SYSTEM_IMG=OpenThos/system.sfs"
 	bootdisk=`echo "$device"|tr -d "0-9"`
@@ -235,6 +240,10 @@ install_system()
 		| progress_bar "Installing OPENTHOS" "Expect to write $size KB..."
 	tar -xvf /mnt/$SRC/efi.tar.bz2 -C $EfiMountPoint > /dev/null
 	mv $EfiMountPoint/efi/boot $EfiMountPoint/efi/boto
+	if [ ! -e $EfiMountPoint/efi/boot/bootx64.efi ];then
+		mkdir $EfiMountPoint/efi/boot -p
+		mv $EfiMountPoint/efi/boto/fallback_x64.efi $EfiMountPoint/efi/boot/bootx64.efi
+	fi
 	UUID=`blkid $1"1"|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
 	CMD="quiet androidboot.hardware=android_x86_64 BOOT_MODE=hdimgboot RAMDISK_HD_UUID=$UUID RAMDISK_IMG=OpenThos/ramdisk.img SYSTEM_HD_UUID=$UUID SYSTEM_IMG=OpenThos/system.sfs"
 	bootdisk=$1
