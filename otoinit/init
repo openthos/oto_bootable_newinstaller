@@ -761,8 +761,6 @@ debug_shell()
     rm -rf /cache/*
   fi
 
-  chmod 777 /android/preinstall.sh
-
   if [ 0$DEBUG -gt 1 ]; then
     echo -e "\nUse Alt-F1/F2/F3 to switch between virtual consoles"
     echo -e "Type 'exit' to enter Android...\n"
