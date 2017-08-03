@@ -732,10 +732,13 @@ debug_shell()
   fi
 
   get_param_from_bootargs RECOVERY
-  if [ "$RECOVERY" = "1" ];then
+  if [ "$RECOVERY" = "1" -o -e /android/data/rec_reset ];then
     recovery_hint
     if [ $? -eq 0 ];then
-      rm -rf /android/data/*
+      for dir in `ls /android/data/|grep -v vendor`;do
+        rm -rf /android/data/$dir
+      done
+      rm -rf /cache/*
     fi
   fi
 
@@ -754,12 +757,6 @@ debug_shell()
   setup_tslib
   setup_dpi
 #post_detect
-
-
-  if [ -e /android/data/rec_reset ]; then
-    rm -rf /android/data/*
-    rm -rf /cache/*
-  fi
 
   if [ 0$DEBUG -gt 1 ]; then
     echo -e "\nUse Alt-F1/F2/F3 to switch between virtual consoles"
