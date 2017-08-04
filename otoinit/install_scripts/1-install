@@ -213,7 +213,7 @@ pre_mount()
 	ker_part=$1"1"
 	sys_part=$1"2"
 	data_part=$1"3"
-	mkfs.vfat -I $ker_part
+	mkfs.vfat -I -n EFI $ker_part
 	try_mount rw $ker_part $EfiMountPoint
 	mke2fs -F -t ext4 $sys_part
 	try_mount rw $sys_part $SysMountPoint

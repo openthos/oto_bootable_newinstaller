@@ -224,7 +224,7 @@ pre_mount()
 {
 	sys_part=$1"1"
 	data_part=$1"2"
-	mkfs.vfat -I $sys_part
+	mkfs.vfat -I -n EFI $sys_part
 	try_mount rw $sys_part $EfiMountPoint
 	mkntfs -F -f $data_part
 	mount.ntfs-3g -o rw $data_part $DataMountPoint
