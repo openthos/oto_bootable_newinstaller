@@ -16,8 +16,8 @@ auto_detect()
 		sed -n 's/^alias  *\([^ ]*\)  *\(.*\)/\1)busybox modprobe \2;;/p' >> $tmp
 	echo 'esac; done; }' >> $tmp
 	source $tmp
-	cat /sys/bus/*/devices/*/modalias | dev2mod
-	cat /sys/devices/virtual/wmi/*/modalias | dev2mod
+	cat /sys/bus/*/devices/*/modalias 2> /dev/null | dev2mod
+	cat /sys/devices/virtual/wmi/*/modalias 2> /dev/null | dev2mod
 }
 
 find_network_dev_name()
