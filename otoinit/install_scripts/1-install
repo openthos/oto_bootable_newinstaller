@@ -2,7 +2,8 @@
 # By 
 #  Chih-Wei Huang   <cwhuang@linux.org.tw>
 #  Yu Chen          <yuchen@tsinghua.edu.cn>
-# Last updated 2016/08/06
+#  David Chen       <chenwei01@thtfpc.com>
+# Last updated 2017/08/31
 #
 # License: GNU Public License
 # We explicitely grant the right to use the scripts
@@ -268,9 +269,9 @@ rebuild_all_partition()
 	sgdisk -g -o -Z $disk
 	dialog --infobox "\n Create new GPT Partitions..." 5 45
 	# We just assume that  sector size is 512B
-	sgdisk -g -n 1:2048:4196351 -t 1:ef00 $disk
-	sgdisk -g -n 2:4196352:12584959 -t 2:8300 $disk
-	sgdisk -g -n 3:12584960: -t 3:8300 $disk
+	sgdisk -g -n 1:2048:411647 -t 1:ef00 $disk
+	sgdisk -g -n 2:411648:8800255 -t 2:8300 $disk
+	sgdisk -g -n 3:8800256: -t 3:8300 $disk
 }
 hd_install_all(){
 	pre_mount $1
