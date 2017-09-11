@@ -83,11 +83,13 @@ boto_install_to()
 		[ $? -ne 0 ] && return 255
 	done
 
-	tar -xvf /mnt/$SRC/efi.tar.bz2 -C $EfiMountPoint > /dev/null
-	mv $EfiMountPoint/efi/boot $EfiMountPoint/efi/boto
 	if [ ! -e $EfiMountPoint/efi/boot/bootx64.efi ];then
-		mkdir $EfiMountPoint/efi/boot -p
-		mv $EfiMountPoint/efi/boto/fallback_x64.efi $EfiMountPoint/efi/boot/bootx64.efi
+		cp $EfiMountPoint/efi/boot/bootx64.efi /tmp/ > /dev/null
+		tar -xvf /mnt/$SRC/efi.tar.bz2 -C $EfiMountPoint > /dev/null
+		rm -f $EfiMountPoint/efi/boot/bootx64.efi > /dev/null
+		cp /tmp/bootx64.efi $EfiMountPoint/efi/boot/bootx64.efi > /dev/null
+	else
+		tar -xvf /mnt/$SRC/efi.tar.bz2 -C $EfiMountPoint > /dev/null
 	fi
 
 	UUID=`blkid $device|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
@@ -242,12 +244,8 @@ hd_install_system()
 	cp -af /sfs/system/* $SysMountPoint/
 
 	SUUID=`blkid "$1"2|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
-	tar -xvf /mnt/$SRC/efi.tar.bz2 -C $EfiMountPoint/ > /dev/null
-	mv $EfiMountPoint/efi/boot $EfiMountPoint/efi/boto
-	if [ ! -e $EfiMountPoint/efi/boot/bootx64.efi ];then
-		mkdir $EfiMountPoint/efi/boot -p
-		mv $EfiMountPoint/efi/boto/fallback_x64.efi $EfiMountPoint/efi/boot/bootx64.efi
-	fi
+
+	tar -xvf /mnt/$SRC/efi.tar.bz2 -C $EfiMountPoint > /dev/null
 
 	UUID=`blkid $1"1"|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
 	CMD="quiet androidboot.hardware=android_x86_64 BOOT_MODE=hdboot RAMDISK_HD_UUID=$UUID RAMDISK_IMG=OpenThos/ramdisk.img SYSTEM_HD_UUID=$SUUID"
@@ -290,11 +288,11 @@ hd_auto_install()
 manual_install_guide(){
 dialog --title "Manual Install Guide" --yes-label "Understand" --no-label "Cancel" --yesno "\
 ------------------------------------------------------------------------------------\n\
-                     |Choose sda1 to install bootloader&kernel|\n\
+                     |Choose sdX1 to install bootloader&kernel|\n\
                       ----------------------------------------\n\
                                        |\n 
                          -------------------------------\n\
-                         |    Format sda1 with FAT32   |\n\
+                         |    Format sdX1 with FAT32   |\n\
                          -------------------------------\n\
                                        |\n 
                        -----------------------------------\n\
@@ -302,11 +300,11 @@ dialog --title "Manual Install Guide" --yes-label "Understand" --no-label "Cance
                        -----------------------------------\n\
                                        |\n 
                          -------------------------------\n\
-                         |Choose sda2 to install System|\n\
+                         |Choose sdX2 to install System|\n\
                          -------------------------------\n\
                                        |\n 
                          -------------------------------\n\
-                         |    Format sda2 with ext4    |\n\
+                         |    Format sdX2 with ext4    |\n\
                          -------------------------------\n\
                                        |\n 
                          -------------------------------\n\
@@ -314,11 +312,11 @@ dialog --title "Manual Install Guide" --yes-label "Understand" --no-label "Cance
                          -------------------------------\n\
                                        |\n 
                          -------------------------------\n\
-                         |Choose sda3 to install System|\n\
+                         |Choose sdX3 to install System|\n\
                          -------------------------------\n\
                                        |\n 
                          -------------------------------\n\
-                         |    Format sda3 with ext4    |\n\
+                         |    Format sdX3 with ext4    |\n\
                          -------------------------------\n\
                                        |\n 
                          -------------------------------\n\
@@ -345,7 +343,7 @@ Auto Install:\n\
 Manual Install:\n\
   will need 3 partition,1st:boot&kernel file,2st:System, 3rd:private app and data\n\
       ====================================================\n\
-      |  sda1:8G  | sda2:2G |    sda3:20G             |...|\n\
+      |  sdX1:200M | sdX2:4G |    sdX3:Remained      |...|\n\
       ====================================================\n\
             |           |              |                     \n\
        boot&kernel   System      App and data             \n\
