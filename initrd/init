@@ -144,7 +144,7 @@ done
 mount -t tmpfs tmpfs /android
 cd /android
 while :; do
-       for device in ${ROOT:-/dev/[hmsv][dmr][0-9a-z]*}; do
+       for device in ${ROOT:-/dev/[hmnsv][dmrv][0-9a-z]*}; do
                check_root $device && break 2
                mountpoint -q /mnt && umount /mnt
 	done

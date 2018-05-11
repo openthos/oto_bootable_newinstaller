@@ -34,7 +34,7 @@ partition_drive()
         echo partition_drive ...
 
         echo -n > $menufile
-        for i in /sys/block/[shv]d[a-z] /sys/block/mmcblk?; do
+        for i in /sys/block/[shv]d[a-z] /sys/block/mmcblk? /sys/block/nvme*; do
                 if [ ! -d $i ]; then  # pathname expansion failed
                         continue
                 fi
@@ -114,7 +114,7 @@ select_dev()
 select_whole_dev()
 {
         echo -n > $menufile
-        for i in /sys/block/[shv]d[a-z] /sys/block/mmcblk?; do
+        for i in /sys/block/[shv]d[a-z] /sys/block/mmcblk? /sys/block/nvme*; do
                 if [ ! -d $i ]; then  # pathname expansion failed
                         continue
                 fi

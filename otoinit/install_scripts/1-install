@@ -111,7 +111,7 @@ boto_install_hd()
 	select_efi_dev || rebooting
 	retval=1
 	case "$choice" in
-		[shvm][dm]*)
+		[hmnsv][dmv]*)
 			boto_install_to /dev/$choice
 			retval=$?
 			;;
@@ -162,7 +162,7 @@ boto_install_data_hd()
 	select_data_dev || rebooting
 	retval=1
 	case "$choice" in
-		[shvm][dm]*)
+		[hmnsv][dmv]*)
 			boto_data_install_to /dev/$choice
 			retval=$?
 			;;
@@ -197,7 +197,7 @@ boto_install_system_hd()
 	select_system_dev || rebooting
 	retval=1
 	case "$choice" in
-		[shvm][dm]*)
+		[hmnsv][dmv]*)
 			boto_system_install_to /dev/$choice
 			retval=$?
 			;;

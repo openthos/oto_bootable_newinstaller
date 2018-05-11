@@ -172,7 +172,7 @@ boto_hdimg_system()
 		select_system_dev|| rebooting
 		retval=1
 		case "$choice" in
-			[shvm][dm]*)
+			[hmnsv][dmv]*)
 				boto_install_to /dev/$choice
 				retval=$?
 				break
@@ -194,7 +194,7 @@ boto_hdimg_data()
 	select_data_dev || rebooting
 	retval=1
 	case "$choice" in
-		[shvm][dm]*)
+		[hmnsv][dmv]*)
 			boto_data_install_to /dev/$choice
 			retval=$?
 			;;
