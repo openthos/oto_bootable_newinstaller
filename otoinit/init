@@ -78,9 +78,9 @@ debug_shell()
     cat $CMDLINE | grep "DEBUG" >> /dev/null
 
     if [ $? -ne 0 ]; then
-      echo $1 >> /dev/null
+      echo $@ >> /dev/null
     else
-      echo $1
+      echo $@
     fi
   }
 
@@ -94,6 +94,29 @@ debug_shell()
       printf $1
     fi
   }
+
+
+    #----------------------------------
+    # by: David Chan (chanuei@sina.com)
+    # date: 2018-05-18
+    #
+    # Func: wait_for_blkdev
+    wait_for_blkdev()
+    {
+      dbg_echo -n "Waiting for Block Device ."
+      local n=0
+      local retBlkIdStr=""
+      while [ $n -le 10 ]; do
+        retBlkIdStr=`blkid`
+        if [ -n "$retBlkIdStr" ]; then
+          break
+        fi
+        dbg_echo -n .
+        let ++n
+        sleep 1s
+      done
+      dbg_echo "ready!"
+    }
 
   #----------------------------------
   # by: David Chan (chanuei@sina.com)
@@ -552,6 +575,8 @@ debug_shell()
 # ==============================================================================
   dbg_echo "Stage init start..."
   
+  wait_for_blkdev
+
   dbg_echo "base init: boot mode detecting ..."
   get_param_from_bootargs BOOT_MODE
   dbg_echo "              BOOT_MODE is $BOOT_MODE"
