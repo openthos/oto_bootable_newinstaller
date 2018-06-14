@@ -14,7 +14,7 @@ auto_detect()
 	echo 'dev2mod() { while read dev; do case $dev in' > $tmp
 	sort -r /lib/modules/`uname -r`/modules.alias | \
 		sed -n 's/^alias  *\([^ ]*\)  *\(.*\)/\1)busybox modprobe \2;;/p' >> $tmp
-	echo 'esac; done; }' >> $tmp
+	echo 'esac; done; } 2> /dev/null' >> $tmp
 	source $tmp
 	cat /sys/bus/*/devices/*/modalias 2> /dev/null | dev2mod
 	cat /sys/devices/virtual/wmi/*/modalias 2> /dev/null | dev2mod
