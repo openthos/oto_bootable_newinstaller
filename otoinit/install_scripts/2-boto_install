@@ -120,7 +120,7 @@ boto_install_to()
 	fi
 
 	UUID=`blkid $device|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
-	CMD="quiet BOOT_MODE=hdimgboot RAMDISK_HD_UUID=$UUID RAMDISK_IMG=OpenThos/ramdisk.img SYSTEM_HD_UUID=$UUID SYSTEM_IMG=OpenThos/system.sfs"
+	CMD="quiet loglevel=0 BOOT_MODE=hdimgboot RAMDISK_HD_UUID=$UUID RAMDISK_IMG=OpenThos/ramdisk.img SYSTEM_HD_UUID=$UUID SYSTEM_IMG=OpenThos/system.sfs"
 	bootdisk=`echo "$device"|tr -d "0-9"`
 	part=`echo "$device"|tr -cd "0-9"`
 
@@ -245,7 +245,7 @@ install_system()
 		mv $EfiMountPoint/efi/boto/fallback_x64.efi $EfiMountPoint/efi/boot/bootx64.efi
 	fi
 	UUID=`blkid $1"1"|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
-	CMD="quiet BOOT_MODE=hdimgboot RAMDISK_HD_UUID=$UUID RAMDISK_IMG=OpenThos/ramdisk.img SYSTEM_HD_UUID=$UUID SYSTEM_IMG=OpenThos/system.sfs"
+	CMD="quiet loglevel=0 BOOT_MODE=hdimgboot RAMDISK_HD_UUID=$UUID RAMDISK_IMG=OpenThos/ramdisk.img SYSTEM_HD_UUID=$UUID SYSTEM_IMG=OpenThos/system.sfs"
 	bootdisk=$1
 
 	sync;sync;sync
