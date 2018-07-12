@@ -760,11 +760,12 @@ debug_shell()
   if [ "$RECOVERY" = "1" -o -e /android/data/rec_reset ];then
     recovery_hint
     if [ $? -eq 0 ];then
-      for dir in `ls -A /android/data/|grep -v vendor`;do
-        rm -rf /android/data/$dir
-      done
-    elif [ -e /android/data/rec_reset ];then
-      rm /android/data/rec_reset
+       get_param_from_bootargs DATA_HD_UUID
+       DATA_PART=`blkid | grep $DATA_HD_UUID | awk -F ":" '{print $1;}'`
+       DATA_FS=`blkid | grep $DATA_HD_UUID | awk -F "TYPE=" '{print $2;}' | cut -d \" -f 2`
+       umount -f $DATA_PART
+       mke2fs -t $DATA_FS -L "oto_data" -U $DATA_HD_UUID -F $DATA_PART > /dev/null
+       mount $DATA_PART data
     fi
   fi
 

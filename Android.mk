@@ -91,10 +91,6 @@ $(INSTALL_RAMDISK): $(wildcard $(LOCAL_PATH)/install/*/* $(LOCAL_PATH)/install/*
 	$(hide) mkdir -p $(@D)/oto/scripts && $(ACP) -fp $(local_dir)/otoinit/install_scripts/* $(@D)/oto/scripts/
 	$(MKBOOTFS) $(dir $(dir $(<D))) $(@D)/modules $(@D)/oto | gzip -9 > $@
 
-DATA_IMG := $(PRODUCT_OUT)/data.img
-$(DATA_IMG): $(wildcard $(ANDROID_BUILD_TOP)/packages/apps/ExternalApp) | $(MKBOOTFS)
-	$(MKBOOTFS) $^ | gzip -9 > $@
-
 boot_dir := $(PRODUCT_OUT)/boot
 $(boot_dir): $(wildcard $(LOCAL_PATH)/boot/isolinux/*) $(systemimg) $(GENERIC_X86_CONFIG_MK) | $(ACP)
 	$(hide) rm -rf $@
@@ -138,7 +134,7 @@ OTO_BUILT_IMG += $(if $(TARGET_PREBUILT_KERNEL),$(TARGET_PREBUILT_KERNEL),$(PROD
 REFIND=$(PRODUCT_OUT)/efi.tar.bz2
 OTO_IMAGE := $(PRODUCT_OUT)/$(TARGET_PRODUCT)_oto.img
 ESP_LAYOUT := $(LOCAL_PATH)/editdisklbl/esp_layout.conf
-$(OTO_IMAGE): $(wildcard $(LOCAL_PATH)/install/refind/*) $(OTO_INITRD_RAMDISK) $(OTO_BUILT_IMG) $(DATA_IMG) $(ESP_LAYOUT) | $(edit_mbr)
+$(OTO_IMAGE): $(wildcard $(LOCAL_PATH)/install/refind/*) $(OTO_INITRD_RAMDISK) $(OTO_BUILT_IMG) $(ESP_LAYOUT) | $(edit_mbr)
 	$(hide) tar jcf $(REFIND) -C $(<D) efi
 	$(hide) cp $(PRODUCT_OUT)/oto_initrd.img $(PRODUCT_OUT)/initrd.img
 	$(hide) size=0; \
@@ -150,7 +146,7 @@ $(OTO_IMAGE): $(wildcard $(LOCAL_PATH)/install/refind/*) $(OTO_INITRD_RAMDISK) $
 	rm -f $@.fat; mkdosfs -n OTO_INSTDSK -C $@.fat $$size
 	$(hide) mcopy -Qsi $@.fat $(<D)/efi ::
 	$(hide) mmd -i $@.fat ::OpenThos
-	$(hide) mcopy -Qsi $@.fat $(OTO_BUILT_IMG) $(DATA_IMG) $(PRODUCT_OUT)/initrd.img $(REFIND) $(<D)/boto_linux.conf ::OpenThos/
+	$(hide) mcopy -Qsi $@.fat $(OTO_BUILT_IMG) $(PRODUCT_OUT)/initrd.img $(REFIND) $(<D)/boto_linux.conf ::OpenThos/
 	$(hide) cat /dev/null > $@; $(edit_mbr) -l $(ESP_LAYOUT) -i $@ esp=$@.fat
 	$(hide) rm -f $@.fat $(PRODUCT_OUT)/initrd.img
 
