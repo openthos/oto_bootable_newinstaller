@@ -114,20 +114,36 @@ select_dev()
 select_whole_dev()
 {
         echo -n > $menufile
-        for i in /sys/block/[shv]d[a-z] /sys/block/mmcblk? /sys/block/nvme*; do
-                if [ ! -d $i ]; then  # pathname expansion failed
+        for i in /sys/block/*; do
+                if [ ! -d $i/device ]; then  # pathname expansion failed
                         continue
                 fi
-                echo -n `basename $i` >> $menufile
-                if [ -f $i/removable -a `cat $i/removable` -eq 0 ]; then
-                        echo -n ' "Harddisk ' >> $menufile
+                if [ -f $i/removable -a $(cat $i/removable) -eq 0 ]; then
+			echo -n $(basename $i) >> $menufile
                 else
-                        echo -n ' "Removable' >> $menufile
+			continue
                 fi 
+		echo -n ' "' >> $menufile
                 if [ -f $i/size ]; then
-                        echo -n " (" `cat $i/size` "blocks)" >> $menufile
+			echo -n $(($(cat $i/size) / 2048))"MB" >> $menufile
                 fi
-                echo '"' >> $menufile
+		model_unknown=yes
+		echo -n ' (' >> $menufile
+		if [ -f $i/device/vendor ]; then
+			echo -n $(cat $i/device/vendor) >> $menufile
+			model_unknown=no
+		fi
+		if [ -f $i/device/model ]; then
+			if [ x"$model_unknown" == x"no" ]; then
+				echo -n " " >> $menufile
+			fi
+			echo -n $(cat $i/device/model) >> $menufile
+			model_unknown=no
+		fi
+		if [ x"$model_unknown" == x"yes" ]; then
+			echo -n "Generic Disk" >> $menufile
+		fi
+		echo  ')"' >> $menufile
         done
         count=`wc -l $menufile | awk '{ print $1 }'`
         if [ $count -eq 0 ]; then
@@ -135,13 +151,9 @@ select_whole_dev()
                         "\nOK. There is no hard drive to edit partitions." 8 49
                 return 255
         fi 
-        if [ $count -eq 1 ]; then
-                choice=`awk '{ print $1 }' $menufile`
-                retval=0
-        else
-                choose "Choose Drive" "Please select a drive to Install OPENTHOS:"
-        fi
+        choose "Choose Drive" "Please select a drive to Install OPENTHOS:"
 }
+
 select_efi_dev()
 {
         select_dev
