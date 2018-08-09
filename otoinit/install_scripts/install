@@ -29,89 +29,8 @@ progress_bar()
 {
         dialog --clear --title " $1 " --gauge "\n $2" 8 70
 }
-partition_drive()
-{
-        echo partition_drive ...
 
-        echo -n > $menufile
-        for i in /sys/block/[shv]d[a-z] /sys/block/mmcblk? /sys/block/nvme*; do
-                if [ ! -d $i ]; then  # pathname expansion failed
-                        continue
-                fi
-                echo -n `basename $i` >> $menufile
-                if [ -f $i/removable -a `cat $i/removable` -eq 0 ]; then
-                        echo -n ' "Harddisk ' >> $menufile
-                else
-                        echo -n ' "Removable' >> $menufile
-                fi
-                if [ -f $i/size ]; then
-                        echo -n " (" `cat $i/size` "blocks)" >> $menufile
-                fi
-                echo '"' >> $menufile
-        done
-        count=`wc -l $menufile | awk '{ print $1 }'`
-        if [ $count -eq 0 ]; then
-                dialog --title " Error " --msgbox \
-                        "\nOK. There is no hard drive to edit partitions." 8 49
-                return 255
-        fi
-        if [ $count -eq 1 ]; then
-                choice=`awk '{ print $1 }' $menufile`
-                retval=0
-        else
-                choose "Choose Drive" "Please select a drive to edit partitions:"
-        fi
-        if [ $retval -eq 0 ]; then
-                dialog --title " Confirm " --yesno "\n Do you want to use GPT?" 7 29
-                if [ $? -eq 0 ]; then
-                        cgdisk /dev/$choice
-                else
-                        cfdisk /dev/$choice
-                fi
-                if [ $? -eq 0 ]; then
-                        retval=1
-                else
-                        retval=255
-                fi
-        fi
-        return $retval
-}
-select_dev()
-{
-        echo select_dev ...
-
-        blkid | grep -v -E "^/dev/block/|^/dev/loop" | cut -b6- | sort | awk '{
-                t="unknown"
-                for (i = NF; i > 1; --i)
-                        if (match($i, "^TYPE")) {
-                                t=$i
-                                break
-                        }
-                gsub(/TYPE=|"/, "", t)
-                printf("%s\t%s\n", $1, t)
-        }' > $tempfile
-
-        lsblk=`ls /sys/block | grep -v -E "loop|ram|sr|boot|rpmb"`
-        for d in $lsblk; do
-                p=0
-                for i in /sys/block/$d/$d* /sys/block/$d; do
-                        [ -e $i/partition ] && p=1
-                        [ $p -eq 1 -a "$i" = "/sys/block/$d" ] && break
-                        echo $i | grep -q -E "boot|rpmb" && continue
-                        [ -d $i ] && ( tmps=`grep "\`basename $i:\`" $tempfile`;if [ -n "`echo -n "$tmps"`" ];then echo -n $tmps;else echo -n "`basename $i` unknown";fi )
-                        [ -d $i ] && ( disk=`basename $i`; partition_size=`blockdev --getsize64 /dev/$disk`;echo " "`expr $partition_size / 1024`"KB" )
-                done
-        done | awk '{
-                sub(/:/, "", $1)
-                printf("\"%-13s%-17s%-13s", $1, $2, $3)
-                system("cd /sys/block; for f in "$1"/device/model "$1"/device/name */"$1"/../device/model */"$1"/../device/name; do [ -e $f ] && echo -n `cat $f` && break; done")
-                printf("\" \"\"\n")
-        } END {
-                printf("\"Create/Modify partitions\" \"\"\n\"Detect devices\" \"\"")
-        }' > $menufile
-}
-
-select_whole_dev()
+find_all_drive()
 {
         echo -n > $menufile
         for i in /sys/block/*; do
@@ -121,11 +40,11 @@ select_whole_dev()
                 if [ -f $i/removable -a $(cat $i/removable) -eq 0 ]; then
 			echo -n $(basename $i) >> $menufile
                 else
-			continue
-                fi 
+                        continue
+                fi
 		echo -n ' "' >> $menufile
                 if [ -f $i/size ]; then
-			echo -n $(($(cat $i/size) / 2048))"MB" >> $menufile
+                        echo -n $(($(cat $i/size) / 2048))"MB" >> $menufile
                 fi
 		model_unknown=yes
 		echo -n ' (' >> $menufile
@@ -145,10 +64,84 @@ select_whole_dev()
 		fi
 		echo  ')"' >> $menufile
         done
+}
+
+partition_drive()
+{
+        echo partition_drive ...
+
+	find_all_drive
+
         count=`wc -l $menufile | awk '{ print $1 }'`
         if [ $count -eq 0 ]; then
                 dialog --title " Error " --msgbox \
                         "\nOK. There is no hard drive to edit partitions." 8 49
+                return 255
+        fi
+
+	choose "Choose Drive" "Please select a drive to edit partitions:"
+
+        if [ $retval -eq 0 ]; then
+                dialog --title " Confirm " --yesno "\n Do you want to use GPT?" 7 29
+                if [ $? -eq 0 ]; then
+                        cgdisk /dev/$choice
+                else
+                        cfdisk /dev/$choice
+                fi
+                if [ $? -eq 0 ]; then
+                        retval=1
+                else
+                        retval=255
+                fi
+        fi
+        return $retval
+}
+
+
+select_dev()
+{
+        echo select_dev ...
+
+	find_all_drive
+
+	cat $menufile > $tempfile
+	for i in $(cat $tempfile | awk '{print $1}'); do
+		disk=$(basename $i)
+		echo -n $disk": "
+		echo -n "DISK "
+		echo $(($(cat /sys/block/$i/size) / 2048))"MB "
+		for j in $(ls -d /sys/block/$i/$i* 2>/dev/null); do
+			disk=$(basename $j)
+			echo -n $disk": "
+			blkid | grep "/dev/$disk" > /dev/null
+			if [ $? = 0 ]; then
+				type=$(blkid | grep "/dev/$disk" | sed 's/.*\ TYPE="\([a-z,0-9]*\)".*/\1/g')
+			else
+				type=unknown
+			fi
+			echo -n $type" "
+			echo $(($(cat $j/size) / 2048))"MB "
+		done
+        done | awk '{
+		sub(/:/, "", $1)
+		printf("\"%-13s%-17s%-13s", $1, $2, $3)
+               system("cd /sys/block; for f in "$1"/device/model "$1"/device/vendor */"$1"/../device/model */"$1"/../device/vendor; do [ -e $f ] && echo -n `cat $f` && break; done")
+		printf("\" \"\"\n")
+	} END {
+		printf("\"Create/Modify partitions\" \"\"\n\"Detect devices\" \"\"\n")
+	}' > $menufile
+}
+
+select_whole_dev()
+{
+        echo -n > $menufile
+
+	find_all_drive
+
+        count=`wc -l $menufile | awk '{ print $1 }'`
+        if [ $count -eq 0 ]; then
+                dialog --title " Error " --msgbox \
+                        "\nOK. There is no hard drive to install OPENTHOS." 8 49
                 return 255
         fi 
         choose "Choose Drive" "Please select a drive to Install OPENTHOS:"
@@ -160,6 +153,7 @@ select_efi_dev()
         choose "Choose Partition" "Please select a partition to install OPENTHOS EFI partition:"
         return $retval
 }
+
 select_data_dev()
 {
         select_dev
@@ -216,13 +210,13 @@ format_fs()
                                         printf("%d\n", i+=33)
                         }' | progress_bar "Formatting" "Formatting partition $device..."
                 elif [ $2 = "system" ];then
-                        $cmd $device | awk '{
+                        $cmd -L "oto_sys" $device | awk '{
                                 # FIXME: very imprecise progress
                                 if (match($0, "done"))
                                         printf("%d\n", i+=33)
                         }' | progress_bar "Formatting" "Formatting partition $device..."
                 elif [ $2 = "data" ];then
-                        $cmd $device | awk '{
+                        $cmd -L "oto_data" $device | awk '{
                                 # FIXME: very imprecise progress
                                 if (match($0, "done"))
                                         printf("%d\n", i+=33)

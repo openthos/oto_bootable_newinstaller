@@ -26,6 +26,9 @@ files="/mnt/$SRC/install.img /mnt/$SRC/kernel /mnt/$SRC/initrd.img /mnt/$SRC/ram
 bootconf=$EfiMountPoint/$asrc/boto_linux.conf
 source /scripts/install
 
+System_Parttype_Guid=38F428E6-D326-425D-9140-6E0EA133647C
+Data_Parttype_Guid=DC76DDA9-5AC1-491C-AF42-A82591580C0D
+
 create_data_img()
 {
 	bname=`basename $2`
@@ -111,9 +114,7 @@ boto_install_hd()
 	select_efi_dev || rebooting
 	retval=1
 	case "$choice" in
-		[hmnsv][dmv]*)
-			boto_install_to /dev/$choice
-			retval=$?
+		-*)
 			;;
 		Create*)
 			partition_drive
@@ -121,6 +122,10 @@ boto_install_hd()
 			;;
 		Detect*)
 			dialog --title " Detecting... " --nocancel --pause "" 8 41 1
+			;;
+		*)
+			boto_install_to /dev/$choice
+			retval=$?
 			;;
 	esac
 	return $retval
@@ -141,11 +146,6 @@ boto_data_install_to()
 		dialog --clear --title " Error "  --yesno \
 			"\n Cannot mount $device\n Do you want to format it?" 8 37
 	done
-	mkdir $DataMountPoint/vendor/app -p
-	#cp /mnt/$SRC/data.img $DataMountPoint/vendor/app/
-	cd $DataMountPoint/vendor/app/
-	zcat /mnt/$SRC/data.img|cpio -id
-	#create_boto_data_img
 
 	UUID=`blkid $device|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
 	CMD="$CMD DATA_HD_UUID=$UUID"
@@ -162,9 +162,7 @@ boto_install_data_hd()
 	select_data_dev || rebooting
 	retval=1
 	case "$choice" in
-		[hmnsv][dmv]*)
-			boto_data_install_to /dev/$choice
-			retval=$?
+		-*)
 			;;
 		Create*)
 			partition_drive
@@ -172,6 +170,11 @@ boto_install_data_hd()
 			;;
 		Detect*)
 			dialog --title " Detecting... " --nocancel --pause "" 8 41 1
+			;;
+		*)
+			boto_data_install_to /dev/$choice
+			retval=$?
+			;;
 	esac
 	return $retval
 }
@@ -197,9 +200,7 @@ boto_install_system_hd()
 	select_system_dev || rebooting
 	retval=1
 	case "$choice" in
-		[hmnsv][dmv]*)
-			boto_system_install_to /dev/$choice
-			retval=$?
+		-*)
 			;;
 		Create*)
 			partition_drive
@@ -207,29 +208,44 @@ boto_install_system_hd()
 			;;
 		Detect*)
 			dialog --title " Detecting... " --nocancel --pause "" 8 41 1
+			;;
+		*)
+			boto_system_install_to /dev/$choice
+			retval=$?
+			;;
 	esac
 	return $retval
 }
 
 pre_mount()
 {
-	ker_part=$1"1"
-	sys_part=$1"2"
-	data_part=$1"3"
+
+	disk=$(basename $1)
+	for i in /sys/block/$disk/$disk*;do
+		partNum=$(cat $i/partition)
+		case $partNum in
+		1)
+			ker_part=/dev/$(basename $i)
+			;;
+		2)
+			sys_part=/dev/$(basename $i)
+			;;
+		3)
+			data_part=/dev/$(basename $i)
+			;;
+		*)
+			;;
+		esac
+	done
+
 	mkfs.vfat -I -n EFI $ker_part
 	try_mount rw $ker_part $EfiMountPoint
-	mke2fs -F -t ext4 $sys_part
+	mke2fs -F -t ext4 -L oto_sys $sys_part
 	try_mount rw $sys_part $SysMountPoint
-	mke2fs -F -t ext4 $data_part
+	mke2fs -F -t ext4 -L oto_data $data_part
 	try_mount rw $data_part $DataMountPoint
 }
-pre_install_app()
-{
-	mkdir $DataMountPoint/vendor/app -p
-	#cp /mnt/$SRC/data.img $DataMountPoint/vendor/app/
-	cd $DataMountPoint/vendor/app/
-	zcat /mnt/$SRC/data.img|cpio -id
-}
+
 hd_install_system()
 {
 	mkdir -p $EfiMountPoint/$asrc
@@ -243,18 +259,35 @@ hd_install_system()
 	fi
 	cp -af /sfs/system/* $SysMountPoint/
 
-	SUUID=`blkid "$1"2|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
+
+	disk=$(basename $1)
+	for i in /sys/block/$disk/$disk*;  do
+		UUID=`blkid /dev/$(basename $i)|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
+		partNum=$(cat $i/partition)
+		case $partNum in
+		1)
+			EFI_UUID=$UUID
+			;;
+		2)
+			SYS_UUID=$UUID
+			;;
+		3)
+			DATA_UUID=$UUID
+			;;
+		*)
+			;;
+		esac
+	done
+
 
 	tar -xvf /mnt/$SRC/efi.tar.bz2 -C $EfiMountPoint > /dev/null
 
-	UUID=`blkid $1"1"|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
-	CMD="quiet loglevel=0 BOOT_MODE=hdboot RAMDISK_HD_UUID=$UUID RAMDISK_IMG=OpenThos/ramdisk.img SYSTEM_HD_UUID=$SUUID"
+	CMD="quiet loglevel=0 BOOT_MODE=hdboot RAMDISK_HD_UUID=$EFI_UUID RAMDISK_IMG=OpenThos/ramdisk.img SYSTEM_HD_UUID=$SYS_UUID"
 	bootdisk=$1
 
 	sync;sync;sync
-	pre_install_app
-	UUID=`blkid "$1"3|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
-	CMD="$CMD DATA_HD_UUID=$UUID"
+
+	CMD="$CMD DATA_HD_UUID=$DATA_UUID"
 	echo "\"OpenThos\"" \"$CMD\" > $bootconf
 	echo "\"OpenThos DEBUG\"" \"$CMD DEBUG=1\" >> $bootconf
 	efibootmgr -c -d $bootdisk -p 1 -L OpenThos -l /efi/boto/bootx64.efi
@@ -267,9 +300,9 @@ rebuild_all_partition()
 	sgdisk -g -o -Z $disk
 	dialog --infobox "\n Create new GPT Partitions..." 5 45
 	# We just assume that  sector size is 512B
-	sgdisk -g -n 1:2048:411647 -t 1:ef00 $disk
-	sgdisk -g -n 2:411648:8800255 -t 2:8300 $disk
-	sgdisk -g -n 3:8800256: -t 3:8300 $disk
+	sgdisk -g -n 1:2048:411647 -t 1:ef00 -c 1:"EFI System" $disk
+	sgdisk -g -n 2:411648:8800255 -t 2:$System_Parttype_Guid -c 2:"Openthos System" $disk
+	sgdisk -g -n 3:8800256: -t 3:$Data_Parttype_Guid -c 3:"Openthos Data" $disk
 }
 hd_install_all(){
 	pre_mount $1
