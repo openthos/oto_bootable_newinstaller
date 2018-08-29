@@ -23,15 +23,13 @@ LOCAL_STATIC_LIBRARIES := libdiskconfig_host libcutils liblog
 edit_mbr := $(HOST_OUT_EXECUTABLES)/$(LOCAL_MODULE)
 include $(BUILD_HOST_EXECUTABLE)
 
-VER ?= $(shell date +"%F")
+VER ?= $$(date +"%F")
 
 # use squashfs for iso, unless explictly disabled
 ifneq ($(USE_SQUASHFS),0)
-MKSQUASHFS = $(shell which mksquashfs)
+MKSQUASHFS := $(MAKE_SQUASHFS)
 
 define build-squashfs-target
-	$(if $(shell $(MKSQUASHFS) -version | grep "version [0-3].[0-9]"),\
-		$(error Your mksquashfs is too old to work with kernel 2.6.29. Please upgrade to squashfs-tools 4.0))
 	$(hide) $(MKSQUASHFS) $(1) $(2) -noappend -comp gzip
 endef
 endif
@@ -85,11 +83,15 @@ $(OTO_INITRD_RAMDISK): $(initrd_bin) $(systemimg) $(TARGET_INITRD_SCRIPTS) | $(A
 	$(MKBOOTFS) $(TARGET_INSTALLER_OUT) | gzip -9 > $@
 
 INSTALL_RAMDISK := $(PRODUCT_OUT)/install.img
-$(INSTALL_RAMDISK): $(wildcard $(LOCAL_PATH)/install/*/* $(LOCAL_PATH)/install/*/*/*/* $(LOCAL_PATH)/otoinit/install_scripts/*) $(PRODUCT_OUT)/kernel| $(MKBOOTFS)
+$(INSTALL_RAMDISK): $(wildcard $(LOCAL_PATH)/install/*/* $(LOCAL_PATH)/install/*/*/*/* $(LOCAL_PATH)/otoinit/install_scripts/*) $(PRODUCT_OUT)/kernel | $(MKBOOTFS)
 	$(if $(TARGET_INSTALL_SCRIPTS),$(ACP) -p $(TARGET_INSTALL_SCRIPTS) $(TARGET_INSTALLER_OUT)/scripts)
 	$(hide) mkdir -p $(@D)/modules/bin && ln -f `find $(@D)/obj/kernel -name atkbd.ko -o -name efivarfs.ko` $(@D)/modules/bin
 	$(hide) mkdir -p $(@D)/oto/scripts && $(ACP) -fp $(local_dir)/otoinit/install_scripts/* $(@D)/oto/scripts/
 	$(MKBOOTFS) $(dir $(dir $(<D))) $(@D)/modules $(@D)/oto | gzip -9 > $@
+
+# DATA_IMG := $(PRODUCT_OUT)/data.img
+# $(DATA_IMG): $(wildcard $(ANDROID_BUILD_TOP)/packages/apps/ExternalApp) | $(MKBOOTFS)
+#	$(MKBOOTFS) $^ | gzip -9 > $@
 
 boot_dir := $(PRODUCT_OUT)/boot
 $(boot_dir): $(wildcard $(LOCAL_PATH)/boot/isolinux/*) $(systemimg) $(GENERIC_X86_CONFIG_MK) | $(ACP)
@@ -134,6 +136,7 @@ OTO_BUILT_IMG += $(if $(TARGET_PREBUILT_KERNEL),$(TARGET_PREBUILT_KERNEL),$(PROD
 REFIND=$(PRODUCT_OUT)/efi.tar.bz2
 OTO_IMAGE := $(PRODUCT_OUT)/$(TARGET_PRODUCT)_oto.img
 ESP_LAYOUT := $(LOCAL_PATH)/editdisklbl/esp_layout.conf
+#$(OTO_IMAGE): $(wildcard $(LOCAL_PATH)/install/refind/*) $(OTO_INITRD_RAMDISK) $(OTO_BUILT_IMG) $(DATA_IMG) $(ESP_LAYOUT) | $(edit_mbr)
 $(OTO_IMAGE): $(wildcard $(LOCAL_PATH)/install/refind/*) $(OTO_INITRD_RAMDISK) $(OTO_BUILT_IMG) $(ESP_LAYOUT) | $(edit_mbr)
 	$(hide) tar jcf $(REFIND) -C $(<D) efi
 	$(hide) cp $(PRODUCT_OUT)/oto_initrd.img $(PRODUCT_OUT)/initrd.img
@@ -153,9 +156,9 @@ $(OTO_IMAGE): $(wildcard $(LOCAL_PATH)/install/refind/*) $(OTO_INITRD_RAMDISK) $
 VERSION_FILE=$(local_dir)/otoinit/version
 UPDATE_LIST=$(local_dir)/otoinit/update.list
 UPDATE=openthos
-VERSION := $(shell cat $(VERSION_FILE)|awk '/OpenThos/{print $$2;}')
+VERSION := $$(cat $(VERSION_FILE)|awk '/OpenThos/{print $$2;}')
 
-UPDATE_IMG:= $(addprefix $(PRODUCT_OUT)/, $(shell cat $(UPDATE_LIST)))
+UPDATE_IMG:= $(addprefix $(PRODUCT_OUT)/, $$(cat $(UPDATE_LIST)))
 UPDATE_ZIP := $(PRODUCT_OUT)/$(UPDATE)_$(VERSION).zip
 $(UPDATE_ZIP): $(VERSION_FILE) $(UPDATE_LIST) $(OTO_IMAGE)
 	$(hide) rm -rf $@

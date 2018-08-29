@@ -704,7 +704,7 @@ debug_shell()
     mount_os_img RAMDISK $RAMDISK_IMG
     get_param_from_bootargs SYSTEM_HD_UUID
     if [ -n "$SYSTEM_HD_UUID" ]; then
-      mount_part_via_uuid $SYSTEM_HD_UUID system
+      mount_part_via_uuid $SYSTEM_HD_UUID system ro
     else
       dbg_echo "base init: no SYSTEM_HD_UUID found, will try the default contents"
     fi

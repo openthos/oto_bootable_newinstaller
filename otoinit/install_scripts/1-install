@@ -96,7 +96,7 @@ boto_install_to()
 	fi
 
 	UUID=`blkid $device|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
-	CMD="quiet loglevel=0 BOOT_MODE=hdboot RAMDISK_HD_UUID=$UUID RAMDISK_IMG=OpenThos/ramdisk.img"
+	CMD="quiet loglevel=0 root=/dev/ram0 androidboot.selinux=permissive BOOT_MODE=hdboot RAMDISK_HD_UUID=$UUID RAMDISK_IMG=OpenThos/ramdisk.img"
 	
 	mkdir -p $EfiMountPoint/$asrc
 	cp $files $EfiMountPoint/$asrc/ -rf
@@ -147,6 +147,8 @@ boto_data_install_to()
 			"\n Cannot mount $device\n Do you want to format it?" 8 37
 	done
 
+#	pre_install_app
+
 	UUID=`blkid $device|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
 	CMD="$CMD DATA_HD_UUID=$UUID"
 	echo "\"OpenThos\"" \"$CMD\" > $bootconf
@@ -181,16 +183,17 @@ boto_install_data_hd()
 boto_system_install_to()
 {
 	local device=$1
-	format_fs $device system
+#	format_fs $device system
 	if [ -e /mnt/$SRC/system.sfs ]; then
 		mkdir /sfs/sfs -p
-		mkdir /sfs/system -p
+#		mkdir /sfs/system -p
 		mount -o loop /mnt/$SRC/system.sfs /sfs/sfs
-		mount -o loop /sfs/sfs/system.img /sfs/system
+#		mount -o loop /sfs/sfs/system.img /sfs/system
 	fi
-	mount $device $SysMountPoint
+#	mount $device $SysMountPoint
 	echo "Install System File..."
-	cp -af /sfs/system/* $SysMountPoint/
+#	cp -af /sfs/system/* $SysMountPoint/
+	dd if=/sfs/sfs/system.img of=$device
 
 	UUID=`blkid $device|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
 	CMD="$CMD SYSTEM_HD_UUID=$UUID "
@@ -240,11 +243,18 @@ pre_mount()
 
 	mkfs.vfat -I -n EFI $ker_part
 	try_mount rw $ker_part $EfiMountPoint
-	mke2fs -F -t ext4 -L oto_sys $sys_part
-	try_mount rw $sys_part $SysMountPoint
+#	mke2fs -F -t ext4 -L oto_sys $sys_part
+#	try_mount rw $sys_part $SysMountPoint
 	mke2fs -F -t ext4 -L oto_data $data_part
 	try_mount rw $data_part $DataMountPoint
 }
+
+#pre_install_app()
+#{
+#       mkdir $DataMountPoint/vendor/app -p
+#       cd $DataMountPoint/vendor/app/
+#       zcat /mnt/$SRC/data.img|cpio -id
+#}
 
 hd_install_system()
 {
@@ -257,8 +267,8 @@ hd_install_system()
 	mount -o loop /mnt/$SRC/system.sfs /sfs/sfs
 		mount -o loop /sfs/sfs/system.img /sfs/system
 	fi
-	cp -af /sfs/system/* $SysMountPoint/
-
+#	cp -af /sfs/system/* $SysMountPoint/
+	dd if=/sfs/sfs/system.img of=$sys_part
 
 	disk=$(basename $1)
 	for i in /sys/block/$disk/$disk*;  do
@@ -282,10 +292,12 @@ hd_install_system()
 
 	tar -xvf /mnt/$SRC/efi.tar.bz2 -C $EfiMountPoint > /dev/null
 
-	CMD="quiet loglevel=0 BOOT_MODE=hdboot RAMDISK_HD_UUID=$EFI_UUID RAMDISK_IMG=OpenThos/ramdisk.img SYSTEM_HD_UUID=$SYS_UUID"
+	CMD="quiet loglevel=0 root=/dev/ram0 androidboot.selinux=permissive BOOT_MODE=hdboot RAMDISK_HD_UUID=$EFI_UUID RAMDISK_IMG=OpenThos/ramdisk.img SYSTEM_HD_UUID=$SYS_UUID"
 	bootdisk=$1
 
 	sync;sync;sync
+
+#	pre_install_app
 
 	CMD="$CMD DATA_HD_UUID=$DATA_UUID"
 	echo "\"OpenThos\"" \"$CMD\" > $bootconf
