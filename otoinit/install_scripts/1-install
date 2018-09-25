@@ -39,6 +39,13 @@ install_system_partition()
 	size=`ls -l $1 | awk '{print $5}'`
 	( dd if=$1 | pv -ns $size | dd of=$2 ) 2>&1 \
 		| progress_bar "Installing system to $2" "Expect to write $(($size/1048576)) MB..."
+
+	mkdir -p /system
+	mount $1 /system
+	e2fsck -y $2 > /dev/tty4
+	resize2fs -f $2 > /dev/tty4
+	e2label $2 oto_sys
+	umount /system
 }
 
 create_data_img()
