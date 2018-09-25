@@ -29,6 +29,18 @@ source /scripts/install
 System_Parttype_Guid=38F428E6-D326-425D-9140-6E0EA133647C
 Data_Parttype_Guid=DC76DDA9-5AC1-491C-AF42-A82591580C0D
 
+progress_bar()
+{
+	dialog --clear --title " $1 " --gauge "\n $2" 8 70
+}
+
+install_system_partition()
+{
+	size=`ls -l $1 | awk '{print $5}'`
+	( dd if=$1 | pv -ns $size | dd of=$2 ) 2>&1 \
+		| progress_bar "Installing system to $2" "Expect to write $(($size/1048576)) MB..."
+}
+
 create_data_img()
 {
 	bname=`basename $2`
@@ -181,16 +193,11 @@ boto_install_data_hd()
 boto_system_install_to()
 {
 	local device=$1
-	format_fs $device system
 	if [ -e /mnt/$SRC/system.sfs ]; then
 		mkdir /sfs/sfs -p
-		mkdir /sfs/system -p
 		mount -o loop /mnt/$SRC/system.sfs /sfs/sfs
-		mount -o loop /sfs/sfs/system.img /sfs/system
 	fi
-	mount $device $SysMountPoint
-	echo "Install System File..."
-	cp -af /sfs/system/* $SysMountPoint/
+	install_system_partition /sfs/sfs/system.img $device
 
 	UUID=`blkid $device|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
 	CMD="$CMD SYSTEM_HD_UUID=$UUID "
@@ -240,8 +247,6 @@ pre_mount()
 
 	mkfs.vfat -I -n EFI $ker_part
 	try_mount rw $ker_part $EfiMountPoint
-	mke2fs -F -t ext4 -L oto_sys $sys_part
-	try_mount rw $sys_part $SysMountPoint
 	mke2fs -F -t ext4 -L oto_data $data_part
 	try_mount rw $data_part $DataMountPoint
 }
@@ -254,11 +259,9 @@ hd_install_system()
 	if [ -e /mnt/$SRC/system.sfs ]; then
 		mkdir /sfs/sfs -p
 		mkdir /sfs/system -p
-	mount -o loop /mnt/$SRC/system.sfs /sfs/sfs
-		mount -o loop /sfs/sfs/system.img /sfs/system
+		mount -o loop /mnt/$SRC/system.sfs /sfs/sfs
 	fi
-	cp -af /sfs/system/* $SysMountPoint/
-
+	install_system_partition /sfs/sfs/system.img $sys_part
 
 	disk=$(basename $1)
 	for i in /sys/block/$disk/$disk*;  do
