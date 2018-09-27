@@ -85,18 +85,17 @@ boto_install_to()
 	#format install dev and mount to /hd
 	cd /
 	mountpoint -q $EfiMountPoint && umount $EfiMountPoint
-	local disk=`echo $1|sed 's/[0-9]*$//g'`
-	local device=$1
+	local device=/dev/$1
 	while [ 1 ]; do
 		if [ -n "`blkid $device|grep vfat`" ];
 		then
 			dialog --defaultno --title " Confirm "  --yesno \
-				"\n Detect $1 filesystem is FAT32,Reformat it?" 10 60
+				"\n Detect $device filesystem is FAT32. Reformat it?" 10 60
 			if [ $? -eq 0 ];then
-				format_fs $1 efi
+				format_fs $device efi
 			fi
 		else
-			format_fs $1 efi
+			format_fs $device efi
 		fi
 
 		try_mount rw $device $EfiMountPoint && break
@@ -119,8 +118,8 @@ boto_install_to()
 	
 	mkdir -p $EfiMountPoint/$asrc
 	cp $files $EfiMountPoint/$asrc/ -rf
-	bootdisk=/dev/`echo "$1"|tr -d "0-9"`
-	part=`echo "$1"|tr -d "a-z"`
+	bootdisk=/dev/`ls -d /sys/block/*/$1 | cut -d/ -f4`
+	part=`cat /sys/block/*/$1/partition`
 	dialog --infobox "\n Syncing installtion efi partition to disk..." 5 50
 	sync
 
@@ -143,7 +142,7 @@ boto_install_hd()
 			dialog --title " Detecting... " --nocancel --pause "" 8 41 1
 			;;
 		*)
-			boto_install_to /dev/$choice
+			boto_install_to $choice
 			retval=$?
 			;;
 	esac

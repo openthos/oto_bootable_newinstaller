@@ -80,13 +80,12 @@ boto_install_to()
 	echo boto_install_to ...
 
 	cd /
-	local disk=`echo $1|sed 's/[0-9]*$//g'`
-	local device=$1
+	local device=/dev/$1
 	while [ 1 ]; do
 		if [ -n "`blkid $device|grep vfat`" ];
 		then
 			dialog --title " Confirm "  --defaultno --yesno \
-				"\n Detect $1 filesystem is FAT32,Reformat it?" 10 60
+				"\n Detect $device filesystem is FAT32. Reformat it?" 10 60
 			if [ $? -eq 0 ];then
 				format_fs $device efi
 			fi
@@ -121,8 +120,8 @@ boto_install_to()
 
 	UUID=`blkid $device|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
 	CMD="quiet loglevel=0 BOOT_MODE=hdimgboot RAMDISK_HD_UUID=$UUID RAMDISK_IMG=OpenThos/ramdisk.img SYSTEM_HD_UUID=$UUID SYSTEM_IMG=OpenThos/system.sfs"
-	bootdisk=`echo "$device"|tr -d "0-9"`
-	part=`echo "$device"|tr -cd "0-9"`
+	bootdisk=/dev/`ls -d /sys/block/*/$1 | cut -d/ -f4`
+	part=`cat /sys/block/*/$1/partition`
 
 	#finish install openthos EFI partition
 	dialog --infobox "\n Syncing to disk..." 5 27
@@ -173,7 +172,7 @@ boto_hdimg_system()
 		retval=1
 		case "$choice" in
 			[hmnsv][dmv]*)
-				boto_install_to /dev/$choice
+				boto_install_to $choice
 				retval=$?
 				break
 				;;
