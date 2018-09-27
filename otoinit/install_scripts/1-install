@@ -122,8 +122,6 @@ boto_install_to()
 	part=`cat /sys/block/*/$1/partition`
 	dialog --infobox "\n Syncing installtion efi partition to disk..." 5 50
 	sync
-
-	return $result
 }
 boto_install_hd()
 {
