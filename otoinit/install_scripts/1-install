@@ -104,7 +104,7 @@ boto_install_to()
 		[ $? -ne 0 ] && return 255
 	done
 
-	if [ ! -e $EfiMountPoint/efi/boot/bootx64.efi ];then
+	if [ -e $EfiMountPoint/efi/boot/bootx64.efi ];then
 		cp $EfiMountPoint/efi/boot/bootx64.efi /tmp/ > /dev/null
 		tar -xvf /mnt/$SRC/efi.tar.bz2 -C $EfiMountPoint > /dev/null
 		rm -f $EfiMountPoint/efi/boot/bootx64.efi > /dev/null
