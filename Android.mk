@@ -88,7 +88,7 @@ INSTALL_RAMDISK := $(PRODUCT_OUT)/install.img
 $(INSTALL_RAMDISK): $(wildcard $(LOCAL_PATH)/install/*/* $(LOCAL_PATH)/install/*/*/*/* $(LOCAL_PATH)/otoinit/install_scripts/*) $(PRODUCT_OUT)/kernel| $(MKBOOTFS)
 	$(if $(TARGET_INSTALL_SCRIPTS),$(ACP) -p $(TARGET_INSTALL_SCRIPTS) $(TARGET_INSTALLER_OUT)/scripts)
 	$(hide) mkdir -p $(@D)/modules/bin && ln -f `find $(@D)/obj/kernel -name atkbd.ko -o -name efivarfs.ko` $(@D)/modules/bin
-	$(hide) mkdir -p $(@D)/oto/scripts && $(ACP) -fp $(local_dir)/otoinit/install_scripts/* $(@D)/oto/scripts/
+	$(hide) rm -rf $(@D)/oto && mkdir -p $(@D)/oto/scripts && $(ACP) -fp $(local_dir)/otoinit/install_scripts/* $(@D)/oto/scripts/
 	$(MKBOOTFS) $(dir $(dir $(<D))) $(@D)/modules $(@D)/oto | gzip -9 > $@
 
 boot_dir := $(PRODUCT_OUT)/boot
