@@ -424,8 +424,6 @@ hd_manual_install()
 			[ $? -eq 1 ] && rebooting
 		fi
 	done
-	sum=5;while [[ sum -gt 0 ]];do echo $sum;sum=`expr $sum - 1`;dialog --title " REBOOTING OPENTHOS" --infobox "\n        $sum" 7 30 ;sleep 1; done
-	rebooting
 }
 hd_prepare_install(){
 	if [ ! -d $EfiMountPoint ];then
@@ -438,9 +436,18 @@ hd_install()
 	hd_user_guide
 	if [ $? -eq 1 ];then
 		hd_manual_install
-		sum=5;while [[ sum -gt 0 ]];do echo $sum;sum=`expr $sum - 1`;dialog --title " REBOOTING OPENTHOS" --infobox "\n        $sum" 7 30 ;sleep 1; done
 	else 
 		hd_auto_install
 	fi
+
+	dialog --clear --title ' Congratulations! ' --menu "\n OPENTHOS is installed successfully.\n " 11 51 13 \
+		"Reboot" "" "Debug shell" "" 2> $tempfile
+	case "`cat $tempfile`" in
+		Debug*)
+			debug_shell DEBUG
+			;;
+		*)
+			;;
+	esac
 	rebooting
 }
