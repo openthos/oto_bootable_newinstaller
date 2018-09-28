@@ -29,6 +29,25 @@ source /scripts/install
 System_Parttype_Guid=38F428E6-D326-425D-9140-6E0EA133647C
 Data_Parttype_Guid=DC76DDA9-5AC1-491C-AF42-A82591580C0D
 
+progress_bar()
+{
+	dialog --clear --title " $1 " --gauge "\n $2" 8 70
+}
+
+install_system_partition()
+{
+	size=`ls -l $1 | awk '{print $5}'`
+	( dd if=$1 | pv -ns $size | dd of=$2 ) 2>&1 \
+		| progress_bar "Installing system to $2" "Expect to write $(($size/1048576)) MB..."
+
+	mkdir -p /system
+	mount $1 /system
+	e2fsck -y $2 > /dev/tty4
+	resize2fs -f $2 > /dev/tty4
+	e2label $2 oto_sys
+	umount /system
+}
+
 create_data_img()
 {
 	bname=`basename $2`
@@ -66,18 +85,17 @@ boto_install_to()
 	#format install dev and mount to /hd
 	cd /
 	mountpoint -q $EfiMountPoint && umount $EfiMountPoint
-	local disk=`echo $1|sed 's/[0-9]*$//g'`
-	local device=$1
+	local device=/dev/$1
 	while [ 1 ]; do
 		if [ -n "`blkid $device|grep vfat`" ];
 		then
 			dialog --defaultno --title " Confirm "  --yesno \
-				"\n Detect $1 filesystem is FAT32,Reformat it?" 10 60
+				"\n Detect $device filesystem is FAT32. Reformat it?" 10 60
 			if [ $? -eq 0 ];then
-				format_fs $1 efi
+				format_fs $device efi
 			fi
 		else
-			format_fs $1 efi
+			format_fs $device efi
 		fi
 
 		try_mount rw $device $EfiMountPoint && break
@@ -86,7 +104,7 @@ boto_install_to()
 		[ $? -ne 0 ] && return 255
 	done
 
-	if [ ! -e $EfiMountPoint/efi/boot/bootx64.efi ];then
+	if [ -e $EfiMountPoint/efi/boot/bootx64.efi ];then
 		cp $EfiMountPoint/efi/boot/bootx64.efi /tmp/ > /dev/null
 		tar -xvf /mnt/$SRC/efi.tar.bz2 -C $EfiMountPoint > /dev/null
 		rm -f $EfiMountPoint/efi/boot/bootx64.efi > /dev/null
@@ -100,12 +118,10 @@ boto_install_to()
 	
 	mkdir -p $EfiMountPoint/$asrc
 	cp $files $EfiMountPoint/$asrc/ -rf
-	bootdisk=/dev/`echo "$1"|tr -d "0-9"`
-	part=`echo "$1"|tr -d "a-z"`
+	bootdisk=/dev/`ls -d /sys/block/*/$1 | cut -d/ -f4`
+	part=`cat /sys/block/*/$1/partition`
 	dialog --infobox "\n Syncing installtion efi partition to disk..." 5 50
 	sync
-
-	return $result
 }
 boto_install_hd()
 {
@@ -124,11 +140,22 @@ boto_install_hd()
 			dialog --title " Detecting... " --nocancel --pause "" 8 41 1
 			;;
 		*)
-			boto_install_to /dev/$choice
+			boto_install_to $choice
 			retval=$?
 			;;
 	esac
 	return $retval
+}
+
+install_bootloader()
+{
+	efibootmgr | grep -Eo ".{0,6}OpenThos" | cut -c1-4 > /tmp/efientries
+	if [ -s /tmp/efientries ]; then
+		dialog --title " Question " --defaultno --yesno "\nEFI boot entries for previous OpenThos installations were found.\n\nDo you wish to replace them?" 10 57
+		[ $? -ne 0 ] && return 0
+		while read entry; do efibootmgr -Bb "$entry" > /dev/tty4 2>&1; done < /tmp/efientries
+	fi
+	efibootmgr -v -c -d $1 -p $2 -L OpenThos -l /efi/boto/bootx64.efi > /dev/tty4 2>&1
 }
 
 boto_data_install_to()
@@ -153,7 +180,7 @@ boto_data_install_to()
 	CMD="$CMD DATA_HD_UUID=$UUID"
 	echo "\"OpenThos\"" \"$CMD\" > $bootconf
 	echo "\"OpenThos DEBUG\"" \"$CMD DEBUG=1\" >> $bootconf
-	efibootmgr -c -d $bootdisk -p $part -L OpenThos -l /efi/boto/bootx64.efi
+	install_bootloader $bootdisk $part
 
 	dialog --infobox "\n Syncing data to disk..." 5 30
 	sleep 1
@@ -183,17 +210,11 @@ boto_install_data_hd()
 boto_system_install_to()
 {
 	local device=$1
-#	format_fs $device system
 	if [ -e /mnt/$SRC/system.sfs ]; then
 		mkdir /sfs/sfs -p
-#		mkdir /sfs/system -p
 		mount -o loop /mnt/$SRC/system.sfs /sfs/sfs
-#		mount -o loop /sfs/sfs/system.img /sfs/system
 	fi
-#	mount $device $SysMountPoint
-	echo "Install System File..."
-#	cp -af /sfs/system/* $SysMountPoint/
-	dd if=/sfs/sfs/system.img of=$device
+	install_system_partition /sfs/sfs/system.img $device
 
 	UUID=`blkid $device|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
 	CMD="$CMD SYSTEM_HD_UUID=$UUID "
@@ -243,8 +264,6 @@ pre_mount()
 
 	mkfs.vfat -I -n EFI $ker_part
 	try_mount rw $ker_part $EfiMountPoint
-#	mke2fs -F -t ext4 -L oto_sys $sys_part
-#	try_mount rw $sys_part $SysMountPoint
 	mke2fs -F -t ext4 -L oto_data $data_part
 	try_mount rw $data_part $DataMountPoint
 }
@@ -264,11 +283,9 @@ hd_install_system()
 	if [ -e /mnt/$SRC/system.sfs ]; then
 		mkdir /sfs/sfs -p
 		mkdir /sfs/system -p
-	mount -o loop /mnt/$SRC/system.sfs /sfs/sfs
-		mount -o loop /sfs/sfs/system.img /sfs/system
+		mount -o loop /mnt/$SRC/system.sfs /sfs/sfs
 	fi
-#	cp -af /sfs/system/* $SysMountPoint/
-	dd if=/sfs/sfs/system.img of=$sys_part
+	install_system_partition /sfs/sfs/system.img $sys_part
 
 	disk=$(basename $1)
 	for i in /sys/block/$disk/$disk*;  do
@@ -302,7 +319,7 @@ hd_install_system()
 	CMD="$CMD DATA_HD_UUID=$DATA_UUID"
 	echo "\"OpenThos\"" \"$CMD\" > $bootconf
 	echo "\"OpenThos DEBUG\"" \"$CMD DEBUG=1\" >> $bootconf
-	efibootmgr -c -d $bootdisk -p 1 -L OpenThos -l /efi/boto/bootx64.efi
+	install_bootloader $bootdisk 1
 	sync
 }
 rebuild_all_partition()
@@ -418,8 +435,6 @@ hd_manual_install()
 			[ $? -eq 1 ] && rebooting
 		fi
 	done
-	sum=5;while [[ sum -gt 0 ]];do echo $sum;sum=`expr $sum - 1`;dialog --title " REBOOTING OPENTHOS" --infobox "\n        $sum" 7 30 ;sleep 1; done
-	rebooting
 }
 hd_prepare_install(){
 	if [ ! -d $EfiMountPoint ];then
@@ -432,9 +447,18 @@ hd_install()
 	hd_user_guide
 	if [ $? -eq 1 ];then
 		hd_manual_install
-		sum=5;while [[ sum -gt 0 ]];do echo $sum;sum=`expr $sum - 1`;dialog --title " REBOOTING OPENTHOS" --infobox "\n        $sum" 7 30 ;sleep 1; done
 	else 
 		hd_auto_install
 	fi
+
+	dialog --clear --title ' Congratulations! ' --menu "\n OPENTHOS is installed successfully.\n " 11 51 13 \
+		"Reboot" "" "Debug shell" "" 2> $tempfile
+	case "`cat $tempfile`" in
+		Debug*)
+			debug_shell DEBUG
+			;;
+		*)
+			;;
+	esac
 	rebooting
 }

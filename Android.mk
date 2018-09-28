@@ -73,7 +73,7 @@ $(INITRD_RAMDISK): $(initrd_bin) $(systemimg) $(TARGET_INITRD_SCRIPTS) | $(ACP) 
 	$(MKBOOTFS) $(TARGET_INSTALLER_OUT) | gzip -9 > $@
 
 OTO_INITRD_RAMDISK := $(PRODUCT_OUT)/oto_initrd.img
-$(OTO_INITRD_RAMDISK): $(initrd_bin) $(systemimg) $(TARGET_INITRD_SCRIPTS) | $(ACP) $(MKBOOTFS)
+$(OTO_INITRD_RAMDISK): $(initrd_bin) $(LOCAL_PATH)/otoinit/init $(systemimg) $(TARGET_INITRD_SCRIPTS) | $(ACP) $(MKBOOTFS)
 	rm -rf $(TARGET_INSTALLER_OUT)
 	$(ACP) -pr $(initrd_dir) $(TARGET_INSTALLER_OUT)
 	$(if $(TARGET_INITRD_SCRIPTS),$(ACP) -p $(TARGET_INITRD_SCRIPTS) $(TARGET_INSTALLER_OUT)/scripts)
@@ -86,7 +86,7 @@ INSTALL_RAMDISK := $(PRODUCT_OUT)/install.img
 $(INSTALL_RAMDISK): $(wildcard $(LOCAL_PATH)/install/*/* $(LOCAL_PATH)/install/*/*/*/* $(LOCAL_PATH)/otoinit/install_scripts/*) $(PRODUCT_OUT)/kernel | $(MKBOOTFS)
 	$(if $(TARGET_INSTALL_SCRIPTS),$(ACP) -p $(TARGET_INSTALL_SCRIPTS) $(TARGET_INSTALLER_OUT)/scripts)
 	$(hide) mkdir -p $(@D)/modules/bin && ln -f `find $(@D)/obj/kernel -name atkbd.ko -o -name efivarfs.ko` $(@D)/modules/bin
-	$(hide) mkdir -p $(@D)/oto/scripts && $(ACP) -fp $(local_dir)/otoinit/install_scripts/* $(@D)/oto/scripts/
+	$(hide) rm -rf $(@D)/oto && mkdir -p $(@D)/oto/scripts && $(ACP) -fp $(local_dir)/otoinit/install_scripts/* $(@D)/oto/scripts/
 	$(MKBOOTFS) $(dir $(dir $(<D))) $(@D)/modules $(@D)/oto | gzip -9 > $@
 
 # DATA_IMG := $(PRODUCT_OUT)/data.img
