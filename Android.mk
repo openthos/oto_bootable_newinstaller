@@ -87,6 +87,7 @@ $(INSTALL_RAMDISK): $(wildcard $(LOCAL_PATH)/install/*/* $(LOCAL_PATH)/install/*
 	$(if $(TARGET_INSTALL_SCRIPTS),$(ACP) -p $(TARGET_INSTALL_SCRIPTS) $(TARGET_INSTALLER_OUT)/scripts)
 	$(hide) mkdir -p $(@D)/modules/bin && ln -f `find $(@D)/obj/kernel -name atkbd.ko -o -name efivarfs.ko` $(@D)/modules/bin
 	$(hide) rm -rf $(@D)/oto && mkdir -p $(@D)/oto/scripts && $(ACP) -fp $(local_dir)/otoinit/install_scripts/* $(@D)/oto/scripts/
+	$(hide) sed -i "s|\(BOOT_MODE=\)|$(BOARD_KERNEL_CMDLINE) \1|" $(@D)/oto/scripts/*
 	$(MKBOOTFS) $(dir $(dir $(<D))) $(@D)/modules $(@D)/oto | gzip -9 > $@
 
 # DATA_IMG := $(PRODUCT_OUT)/data.img
@@ -149,7 +150,8 @@ $(OTO_IMAGE): $(wildcard $(LOCAL_PATH)/install/refind/*) $(OTO_INITRD_RAMDISK) $
 	rm -f $@.fat; mkdosfs -n OTO_INSTDSK -C $@.fat $$size
 	$(hide) mcopy -Qsi $@.fat $(<D)/efi ::
 	$(hide) mmd -i $@.fat ::OpenThos
-	$(hide) mcopy -Qsi $@.fat $(OTO_BUILT_IMG) $(PRODUCT_OUT)/initrd.img $(REFIND) $(<D)/boto_linux.conf ::OpenThos/
+	$(hide) sed "s|\( BOOT_MODE=\)| $(BOARD_KERNEL_CMDLINE)\1|" $(<D)/boto_linux.conf > $(@D)/boto_linux.conf
+	$(hide) mcopy -Qsi $@.fat $(OTO_BUILT_IMG) $(PRODUCT_OUT)/initrd.img $(REFIND) $(@D)/boto_linux.conf ::OpenThos/
 	$(hide) cat /dev/null > $@; $(edit_mbr) -l $(ESP_LAYOUT) -i $@ esp=$@.fat
 	$(hide) rm -f $@.fat $(PRODUCT_OUT)/initrd.img
 

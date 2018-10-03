@@ -13,7 +13,7 @@
 
 # mount bootable USB to /mnt/livemedia/OpenThos
 # mount target partition to /hd/efi /hd/system /hd/data
-CMD=""
+CMD="BOOT_MODE=hdboot"
 tempfile=/tmp/temp-$$
 menufile=/tmp/menu-$$
 EfiMountPoint=/hd/efi
@@ -114,7 +114,7 @@ boto_install_to()
 	fi
 
 	UUID=`blkid $device|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
-	CMD="quiet loglevel=0 root=/dev/ram0 androidboot.selinux=permissive BOOT_MODE=hdboot RAMDISK_HD_UUID=$UUID RAMDISK_IMG=OpenThos/ramdisk.img"
+	CMD="$CMD RAMDISK_HD_UUID=$UUID RAMDISK_IMG=OpenThos/ramdisk.img"
 	
 	mkdir -p $EfiMountPoint/$asrc
 	cp $files $EfiMountPoint/$asrc/ -rf
@@ -178,7 +178,7 @@ boto_data_install_to()
 
 	UUID=`blkid $device|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
 	CMD="$CMD DATA_HD_UUID=$UUID"
-	echo "\"OpenThos\"" \"$CMD\" > $bootconf
+	echo "\"OpenThos\"" \"quiet loglevel=0 $CMD\" > $bootconf
 	echo "\"OpenThos DEBUG\"" \"$CMD DEBUG=1\" >> $bootconf
 	install_bootloader $bootdisk $part
 
@@ -309,7 +309,7 @@ hd_install_system()
 
 	tar -xvf /mnt/$SRC/efi.tar.bz2 -C $EfiMountPoint > /dev/null
 
-	CMD="quiet loglevel=0 root=/dev/ram0 androidboot.selinux=permissive BOOT_MODE=hdboot RAMDISK_HD_UUID=$EFI_UUID RAMDISK_IMG=OpenThos/ramdisk.img SYSTEM_HD_UUID=$SYS_UUID"
+	CMD="$CMD RAMDISK_HD_UUID=$EFI_UUID RAMDISK_IMG=OpenThos/ramdisk.img SYSTEM_HD_UUID=$SYS_UUID"
 	bootdisk=$1
 
 	sync;sync;sync
@@ -317,7 +317,7 @@ hd_install_system()
 #	pre_install_app
 
 	CMD="$CMD DATA_HD_UUID=$DATA_UUID"
-	echo "\"OpenThos\"" \"$CMD\" > $bootconf
+	echo "\"OpenThos\"" \"quiet loglevel=0 $CMD\" > $bootconf
 	echo "\"OpenThos DEBUG\"" \"$CMD DEBUG=1\" >> $bootconf
 	install_bootloader $bootdisk 1
 	sync
