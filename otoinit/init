@@ -643,7 +643,7 @@ debug_shell()
           dbg_echo "Evaluation mode success: $DATA_PART"
 	  DATA_UUID=`blkid "$DATA_PART"|awk -F "UUID" '{print $2;}'|awk -F "\"" '{print $2;}'`
           data_uuid="DATA_HD_UUID=$DATA_UUID"
-          sed -i "1 s/\"$/ $data_uuid\"/" $LIVEMEDIA_DIR/OpenThos/boto_linux.conf
+          sed -i "1,2 s/\"$/ $data_uuid\"/" $LIVEMEDIA_DIR/OpenThos/boto_linux.conf
           sync
 	  mount -t $DATA_FS $DATA_PART $ANDROID_DIR/data
 	else
