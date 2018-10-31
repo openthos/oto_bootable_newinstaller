@@ -43,6 +43,7 @@ install_system_partition()
 	mkdir -p /system
 	mount $1 /system
 	e2fsck -y $2 > /dev/tty4
+	echo y | /system/bin/tune2fs -fU time $2 > /dev/tty4
 	resize2fs -f $2 > /dev/tty4
 	e2label $2 oto_sys
 	umount /system
