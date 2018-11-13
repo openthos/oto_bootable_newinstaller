@@ -122,7 +122,7 @@ $(EFI_IMAGE): $(wildcard $(LOCAL_PATH)/boot/efi/*/*) $(BUILT_IMG) $(ESP_LAYOUT) 
 		size=$$(($$size+$$s)); \
         done; \
 	s=`du -sk $(<D)/../../../install/refind|awk '{print $$1}'`;size=$$(($$size+$$s)); \
-	size=$$(($$(($$(($$(($$(($$size + $$(($$size / 100)))) - 1)) / 32)) + 1)) * 32)); \
+	size=$$(($$(($$(($$(($$(($$size + $$(($$size / 100)))) - 1)) / 63)) + 1)) * 63)); \
 	echo > $@.fat; $(MKDOSFS) -n Android-x86 $@.fat $$size
 	$(hide) mcopy -Qsi $@.fat $(<D)/../../../install/grub2/efi $(BUILT_IMG) ::
 	$(hide) mcopy -Qsi $@.fat $(<D)/../../../install/refind ::
@@ -144,7 +144,7 @@ $(OTO_IMAGE): $(wildcard $(LOCAL_PATH)/install/refind/*) $(OTO_INITRD_RAMDISK) $
 		size=$$(($$size+$$s)); \
         done; \
 	s=`du -sk $(REFIND)|awk '{print $$1}'`;size=$$(($$size+$$s + 8096)); \
-	size=$$(($$(($$(($$(($$(($$size + $$(($$size / 100)))) - 1)) / 32)) + 1)) * 32)); \
+	size=$$(($$(($$(($$(($$(($$size + $$(($$size / 100)))) - 1)) / 63)) + 1)) * 63)); \
 	echo > $@.fat; $(MKDOSFS) -n OTO_INSTDSK $@.fat $$size
 	$(hide) mcopy -Qsi $@.fat $(<D)/efi ::
 	$(hide) mmd -i $@.fat ::OpenThos
