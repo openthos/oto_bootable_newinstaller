@@ -113,6 +113,8 @@ $(ISO_IMAGE): $(boot_dir) $(BUILT_IMG)
 	$(hide) isohybrid $@ || echo -e "isohybrid not found.\nInstall syslinux 4.0 or higher if you want to build a usb bootable iso."
 	@echo -e "\n\n$@ is built successfully.\n\n"
 
+MKDOSFS := $(LOCAL_PATH)/initrd/bin/busybox mkdosfs
+
 # Note: requires dosfstools
 EFI_IMAGE := $(PRODUCT_OUT)/$(TARGET_PRODUCT).img
 ESP_LAYOUT := $(LOCAL_PATH)/editdisklbl/esp_layout.conf
@@ -123,8 +125,8 @@ $(EFI_IMAGE): $(wildcard $(LOCAL_PATH)/boot/efi/*/*) $(BUILT_IMG) $(ESP_LAYOUT) 
 		size=$$(($$size+$$s)); \
         done; \
 	s=`du -sk $(<D)/../../../install/refind|awk '{print $$1}'`;size=$$(($$size+$$s)); \
-	size=$$(($$(($$(($$(($$(($$size + $$(($$size / 100)))) - 1)) / 32)) + 1)) * 32)); \
-	rm -f $@.fat; mkdosfs -n Android-x86 -C $@.fat $$size
+	size=$$(($$(($$(($$(($$(($$size + $$(($$size / 100)))) - 1)) / 63)) + 1)) * 63)); \
+	echo > $@.fat; $(MKDOSFS) -n Android-x86 $@.fat $$size
 	$(hide) mcopy -Qsi $@.fat $(<D)/../../../install/grub2/efi $(BUILT_IMG) ::
 	$(hide) mcopy -Qsi $@.fat $(<D)/../../../install/refind ::
 	$(hide) mcopy -Qoi $@.fat $(@D)/grub.cfg ::efi/boot
@@ -146,8 +148,8 @@ $(OTO_IMAGE): $(wildcard $(LOCAL_PATH)/install/refind/*) $(OTO_INITRD_RAMDISK) $
 		size=$$(($$size+$$s)); \
         done; \
 	s=`du -sk $(REFIND)|awk '{print $$1}'`;size=$$(($$size+$$s + 8096)); \
-	size=$$(($$(($$(($$(($$(($$size + $$(($$size / 100)))) - 1)) / 32)) + 1)) * 32)); \
-	rm -f $@.fat; mkdosfs -n OTO_INSTDSK -C $@.fat $$size
+	size=$$(($$(($$(($$(($$(($$size + $$(($$size / 100)))) - 1)) / 63)) + 1)) * 63)); \
+	echo > $@.fat; $(MKDOSFS) -n OTO_INSTDSK $@.fat $$size
 	$(hide) mcopy -Qsi $@.fat $(<D)/efi ::
 	$(hide) mmd -i $@.fat ::OpenThos
 	$(hide) sed "s|\( BOOT_MODE=\)| $(BOARD_KERNEL_CMDLINE)\1|" $(<D)/boto_linux.conf > $(@D)/boto_linux.conf
