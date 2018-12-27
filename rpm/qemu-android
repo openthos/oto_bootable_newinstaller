@@ -46,6 +46,7 @@ run_qemu_on_port()
 	-append "CMDLINE console=ttyS0 RAMDISK=vdb $DATADEV" \
 	-initrd initrd.img \
 	-m 2048 -smp 2 -cpu host \
+	-device usb-tablet \
 	-soundhw ac97 \
 	-serial mon:stdio \
 	-boot menu=on \
