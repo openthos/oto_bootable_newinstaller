@@ -322,26 +322,31 @@ create_data_img()
 try_upgrade()
 {
 	[ -d $1 ] && return
-	PREV_VERS="$PREV_VERS 7.1-r2 7.1-r1 7.1-rc2 7.1-rc1 6.0-r3 6.0-r2 6.0-r1 6.0-rc2 6.0-rc1 5.1-rc1 4.4-r5 4.4-r4 4.4-r3 4.4-r2 4.4-r1 4.4-RC2 4.4-RC1 4.4-test 4.3-test 4.2-test 4.0-r1 4.0-RC2 4.0-RC1"
-	for v in $PREV_VERS; do
-		local prev
-		if [ -d hd/$v ]; then
-			prev=hd/$v
-		elif [ -d hd/android-$v ]; then
-			prev=hd/android-$v
-		else
-			continue
-		fi
+
+	for d in hd/*; do
+		[ -e "$d"/ramdisk.img -a -n "`ls "$d"/system* 2> /dev/null`" ] && echo \"`basename $d`\" \"\"
+	done | sort -r > $menufile
+
+	count=`wc -l < $menufile`
+	if [ $count -gt 1 ]; then
+		echo -e '"" ""\n"Install to new folder '`basename $1`'" ""' >> $menufile
+		choose "Multiple older versions are found" "Please select one to upgrade:"
+	elif [ $count -eq 1 ]; then
+		eval choice=`awk '{ print $1 }' $menufile`
 		set_answer_if_auto 1
 		adialog --title " Question " --yesno \
-			"\nAn older version $v is detected.\nWould you like to upgrade it?" 8 51
-		if [ $? -eq 0 ]; then
+			"\nAn older version $choice is detected.\nWould you like to upgrade it?" 8 61
+		[ $? -eq 0 ] || choice=
+	fi
+
+	if [ -n "$choice" ]; then
+		prev=hd/$choice
+		if [ -d "$prev" ]; then
 			mv $prev $1
 			rm -rf $1/data/dalvik-cache/* $1/data/system/wpa_supplicant
 			sed -i 's/\(ctrl_interface=\)\(.*\)/\1wlan0/' $1/data/misc/wifi/wpa_supplicant.conf
-			break
 		fi
-	done
+	fi
 }
 
 get_part_info()
