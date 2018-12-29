@@ -263,8 +263,9 @@ pre_mount()
 
 	mkfs.vfat -I -n EFI $ker_part
 	try_mount rw $ker_part $EfiMountPoint
-	mke2fs -F -t ext4 -L oto_data $data_part
-	try_mount rw $data_part $DataMountPoint
+
+	mke2fs -F -t ext4 -L oto_data -O project,quota $data_part
+	try_mount rw,prjquota $data_part $DataMountPoint
 }
 
 hd_install_system()

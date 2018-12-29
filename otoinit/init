@@ -712,7 +712,7 @@ debug_shell()
     
     get_param_from_bootargs DATA_HD_UUID
     if [ -n "$DATA_HD_UUID" ]; then
-      mount_part_via_uuid $DATA_HD_UUID data
+      mount_part_via_uuid $DATA_HD_UUID data prjquota
     else
       dbg_echo "base init: no DATA_HD_UUID found, will try the default contents"
     fi
