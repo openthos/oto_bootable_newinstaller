@@ -765,8 +765,8 @@ debug_shell()
        DATA_PART=`blkid | grep $DATA_HD_UUID | awk -F ":" '{print $1;}'`
        DATA_FS=`blkid | grep $DATA_HD_UUID | awk -F "TYPE=" '{print $2;}' | cut -d \" -f 2`
        umount -f $DATA_PART
-       mke2fs -t $DATA_FS -L "oto_data" -U $DATA_HD_UUID -F $DATA_PART > /dev/null
-       mount $DATA_PART data
+       mke2fs -t $DATA_FS -L "oto_data" -O project,quota -U $DATA_HD_UUID -F $DATA_PART > /dev/null
+       mount -o rw,prjquota $DATA_PART data
     fi
   fi
 
