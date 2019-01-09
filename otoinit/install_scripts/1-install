@@ -164,11 +164,11 @@ boto_data_install_to()
 	local device=$1
 	mkdir $DataMountPoint
 	while [ 1 ]; do
-		format_fs $device data
+		mke2fs -F -t ext4 -L oto_data -O project,quota $device
 		if [ `blkid $device|awk -F "TYPE" '{print $2;}'|awk -F "\"" '{print $2;}'` = "ntfs" ];then
 			mount.ntfs-3g $device $DataMountPoint && break
 		else
-			try_mount rw $device $DataMountPoint && break
+			try_mount rw,prjquota $device $DataMountPoint && break
 		fi
 		#try_mount rw $device $DataMountPoint && break
 		dialog --clear --title " Error "  --yesno \
