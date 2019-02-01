@@ -173,7 +173,8 @@ format_fs()
         local cmd
 	local device=$1
         if [ $2 = "data" ];then
-                echo -e '"Do not format" ""\next4 ""\next3 ""\next2 ""\nntfs ""' > $menufile
+                echo -e '"Do not format" ""\next4 ""' > $menufile
+                /system/bin/tune2fs -l $1 | grep quota | grep -q project || cmd="/system/bin/tune2fs"
         elif [ $2 = "system" ];then
                 echo -e '"Do not format" ""\next4 ""\next3 ""\next2 ""' > $menufile
         elif [ $2 = "efi" ];then
@@ -200,7 +201,7 @@ format_fs()
                         ;;
         esac
         if [ -n "$cmd" ]; then
-                dialog --title " Confirm "  --yesno \
+                echo $cmd | grep -q tune2fs || dialog --title " Confirm "  --yesno \
                         "\n You chose to format $device to $choice.\n All data in that partition will LOSE.\n\n Are you sure to format the partition $device?" 10 51
                 [ $? -ne 0 ] && return 1
                 if [ $2 = "efi" ];then
@@ -216,7 +217,7 @@ format_fs()
                                         printf("%d\n", i+=33)
                         }' | progress_bar "Formatting" "Formatting partition $device..."
                 elif [ $2 = "data" ];then
-                        $cmd -L "oto_data" $device | awk '{
+                        $cmd -L "oto_data" -O project,quota $device | awk '{
                                 # FIXME: very imprecise progress
                                 if (match($0, "done"))
                                         printf("%d\n", i+=33)

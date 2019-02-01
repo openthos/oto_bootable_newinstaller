@@ -46,7 +46,6 @@ install_system_partition()
 	echo y | /system/bin/tune2fs -fU time $2 > /dev/tty4
 	resize2fs -f $2 > /dev/tty4
 	e2label $2 oto_sys
-	umount /system
 }
 
 create_data_img()
@@ -164,7 +163,7 @@ boto_data_install_to()
 	local device=$1
 	mkdir $DataMountPoint
 	while [ 1 ]; do
-		mke2fs -F -t ext4 -L oto_data -O project,quota $device
+		format_fs $device data
 		if [ `blkid $device|awk -F "TYPE" '{print $2;}'|awk -F "\"" '{print $2;}'` = "ntfs" ];then
 			mount.ntfs-3g $device $DataMountPoint && break
 		else
