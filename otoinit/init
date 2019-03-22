@@ -759,7 +759,11 @@ debug_shell()
 
   get_param_from_bootargs RECOVERY
   if [ "$RECOVERY" = "1" -o -e /android/data/rec_reset ];then
-    recovery_hint
+    if [ -e /android/data/setupwizard ];then
+        echo "setupwizard is not finished"
+    else
+        recovery_hint
+    fi
     if [ $? -eq 0 ];then
        get_param_from_bootargs DATA_HD_UUID
        DATA_PART=`blkid | grep $DATA_HD_UUID | awk -F ":" '{print $1;}'`
