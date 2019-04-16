@@ -332,8 +332,8 @@ debug_shell()
       return $ERROR_PARMETER
     fi
 
-    #formatting the disk
-    /bin/parted $cur_disk mkpart primary $start $end >> /dev/null 2&>1
+    #parting the disk
+    /bin/parted $cur_disk mkpart primary $start $end >> /dev/null
     if [ $? -ne 0 ]; then
       echo "parted_disk_remaining_space: parted $cur_disk error."
       return $ERROR_PARMETER
@@ -350,9 +350,10 @@ debug_shell()
     partname=$cur_disk$partname
     #echo "_PART_NAME: $partname"
 
+    #formatting the disk
     if [ "$fs_type"x != "no_fs"x ];then
       dbg_echo -e "Formatting the remaining partition of $partname \n$fs_type $size"
-      /bin/mke2fs -F -t $fs_type $partname -L OTO_DATA >> /dev/null 2>&1
+      /bin/mke2fs -F -t $fs_type $partname -L OTO_DATA >> /dev/null
     fi
 
     if [[ $3 ]];then
@@ -635,7 +636,7 @@ debug_shell()
     if [ -n "$DATA_HD_UUID" ];then
       mount_part_via_uuid $DATA_HD_UUID $ANDROID_DIR/data
       dbg_echo "Found the data partition: $DATA_HD_UUID"
-      else
+    else
 	DATA_PART=""
 	#parted and format the usb remaining space
 	parted_disk_remaining_space "" "" DATA_PART DATA_FS
